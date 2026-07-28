@@ -22,6 +22,18 @@ html[data-theme="modern"],
      strokes on black and glares as a filled area. Matches icon.svg. */
   --logo-tile: #14e8c0;
   --logo-curve: #07121b;
+
+  /* Colour roles. --accent was doing three jobs at once — "interactive",
+     "this is data", and "this is good" — so nothing it coloured meant
+     anything. Split by role instead:
+       accent      → you can act on this
+       series-*    → a data series, no judgement implied
+       good / bad  → a directional judgement (better/worse than before,
+                     above/below chance) */
+  --series-loss: #4fd1ff;
+  --series-acc: #a78bfa;
+  --good: #35e5a4;
+  --bad: #ff6b8a;
   color-scheme: dark;
 }
 
@@ -62,6 +74,10 @@ html[data-theme="retro"],
   --header-bg: #0000aa;
   --logo-tile: #ffff55;
   --logo-curve: #0000aa;
+  --series-loss: #55ffff;
+  --series-acc: #ff55ff;
+  --good: #55ff55;
+  --bad: #ff5555;
   color-scheme: dark;
 }
 
@@ -601,11 +617,20 @@ html[data-theme="retro"] .panel-header {
 }
 
 .metric-hint.good {
-  color: var(--accent);
+  color: var(--good);
 }
 
 .metric-hint.bad {
-  color: var(--danger);
+  color: var(--bad);
+}
+
+/* Holds the two curves so one empty state can cover both, instead of each
+   chart repeating the same sentence inside its own SVG. */
+.chart-stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
 }
 
 .chart-label {
@@ -638,6 +663,19 @@ html[data-theme="retro"] .panel-header {
   opacity: 0.55;
   font-family: var(--font-mono);
   font-size: 9px;
+}
+
+/* Accuracy above chance is progress; below it the model is worse than
+   guessing. Shading the two sides makes the baseline mean something instead of
+   being a decorative dashed line. */
+.chart-area-good {
+  fill: var(--good);
+  opacity: 0.16;
+}
+
+.chart-area-bad {
+  fill: var(--bad);
+  opacity: 0.16;
 }
 
 .chart-baseline {
@@ -743,6 +781,95 @@ html[data-theme="retro"] .panel-header {
   font-size: 11px;
   opacity: 0.7;
   font-style: italic;
+}
+
+/* ─── Panel states ───
+   Empty and error states share one treatment; only the tone and the placement
+   differ. Overlays the panel body so real context (axes, layer structure) stays
+   visible behind the message. */
+.panel-body {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+}
+
+.panel-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+  text-align: center;
+  pointer-events: none;
+  /* Light wash only. The copy gets its own plate below, because a full-bleed
+     dim still left text sitting directly on top of scatter points — legible in
+     one theme and a mess in the other. */
+  background: color-mix(in srgb, var(--bg) 35%, transparent);
+}
+
+.panel-state > * {
+  position: relative;
+}
+
+/* The plate: sized to the copy, so it never covers more of the data than the
+   message needs. */
+.panel-state-plate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  max-width: 34ch;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
+}
+
+.panel-state-title {
+  margin: 0;
+  font-size: var(--t-body);
+  font-weight: 500;
+  color: var(--text);
+  opacity: 0.9;
+}
+
+.panel-state-hint {
+  margin: 0;
+  font-size: var(--t-small);
+  color: var(--text-dim);
+  max-width: 30ch;
+  line-height: 1.4;
+}
+
+.panel-state-error .panel-state-title {
+  color: var(--bad);
+}
+
+/* Action failures (Load, Import, a training run that threw) belong where the
+   command was issued, not under the code editor — they aren't syntax. */
+.action-error {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent);
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+  color: var(--bad);
+  font-size: var(--t-small);
+}
+
+.action-error-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--t-body);
+  line-height: 1;
+  padding: 0 var(--s-1);
 }
 
 /* Text mirror of the Data Lab canvas — the canvas itself is opaque to screen

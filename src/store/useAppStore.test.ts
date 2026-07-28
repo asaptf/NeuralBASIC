@@ -425,7 +425,7 @@ describe("useAppStore — state coherence", () => {
     expect(loaded.isTraining).toBe(false);
   });
 
-  it("12. importExperimentFile with malformed JSON sets parseError and keeps state", () => {
+  it("12. importExperimentFile with malformed JSON reports an action error and keeps state", () => {
     store.getState().setDsl(SMALL_AND_DSL);
     store.getState().trainNow();
     const before = store.getState();
@@ -439,7 +439,10 @@ describe("useAppStore — state coherence", () => {
     }).not.toThrow();
 
     const after = store.getState();
-    expect(after.parseError).toMatch(/import failed/i);
+    // An unreadable file is not a DSL problem, so it must not surface under the
+    // code editor — parseError stays clean and actionError carries it.
+    expect(after.actionError).toMatch(/import failed/i);
+    expect(after.parseError).toBeNull();
     expect(after.dsl).toBe(dsl);
     expect(after.history.losses).toEqual(losses);
     expect(after.lastSnapshot).toBe(snapshot);

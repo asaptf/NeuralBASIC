@@ -79,7 +79,11 @@ interface AppState {
   isPaused: boolean;
   epochsRun: number;
   totalEpochs: number;
+  /** DSL problems — surfaced under the editor, because that's where the code is. */
   parseError: string | null;
+  /** Failures of a command the user just issued (Load, Import, a run that threw).
+      Not syntax, so it must not appear under the editor. */
+  actionError: string | null;
   progress: CurriculumProgress;
   tutorMessages: TutorMessage[];
   activeChallengeId: string | null;
@@ -93,6 +97,7 @@ interface AppState {
   setEpochs: (n: number) => void;
   setDataset: (d: TrainConfig["dataset"]) => void;
   parseAndApplyDsl: () => boolean;
+  clearActionError: () => void;
   trainNow: (reason?: string) => void;
   pauseTraining: () => void;
   resumeTraining: () => void;
@@ -296,6 +301,7 @@ export const useAppStore = create<AppState>((set, get) => {
       epochsRun: history.losses.length,
       totalEpochs: history.losses.length,
       parseError: null,
+      actionError: null,
       lastTrigger: "loaded",
     });
   };
@@ -438,6 +444,7 @@ export const useAppStore = create<AppState>((set, get) => {
     epochsRun: 0,
     totalEpochs: 0,
     parseError: null,
+    actionError: null,
     progress: defaultProgress(),
     tutorMessages: [
       {
@@ -499,9 +506,11 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
+    clearActionError: () => set({ actionError: null }),
+
     trainNow: (reason = "manual") => {
       cancelLoop();
-      set({ lastTrigger: reason, parseError: null });
+      set({ lastTrigger: reason, parseError: null, actionError: null });
 
       let parsed;
       try {
@@ -551,7 +560,7 @@ export const useAppStore = create<AppState>((set, get) => {
         set({
           isTraining: false,
           isPaused: false,
-          parseError: e instanceof Error ? e.message : "Training failed",
+          actionError: e instanceof Error ? e.message : "Training failed",
         });
       }
     },
@@ -603,7 +612,7 @@ export const useAppStore = create<AppState>((set, get) => {
         } catch (e) {
           session = null;
           set({
-            parseError: e instanceof Error ? e.message : "Training failed",
+            actionError: e instanceof Error ? e.message : "Training failed",
           });
           return;
         }
@@ -879,7 +888,10 @@ export const useAppStore = create<AppState>((set, get) => {
 
     loadLocal: () => {
       const exp = loadExperiment();
-      if (!exp) return;
+      if (!exp) {
+        set({ actionError: "Nothing saved yet — press Save first." });
+        return;
+      }
       applyLoadedExperiment(exp);
     },
 
@@ -901,7 +913,7 @@ export const useAppStore = create<AppState>((set, get) => {
         applyLoadedExperiment(importExperimentJSON(json));
       } catch (e) {
         set({
-          parseError:
+          actionError:
             e instanceof Error
               ? `Import failed: ${e.message}`
               : "Import failed: not a NeuralBASIC experiment file",

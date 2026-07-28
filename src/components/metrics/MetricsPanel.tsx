@@ -1,5 +1,6 @@
 "use client";
 
+import { PanelState } from "@/components/ui/PanelState";
 import { useAppStore } from "@/store/useAppStore";
 
 const W = 300;
@@ -27,6 +28,19 @@ function polyline(
     .join(" ");
 }
 
+/** Curve closed back along a baseline, so the enclosed area can be filled. */
+function areaPolygon(
+  values: number[],
+  yMin: number,
+  yMax: number,
+  baselineY: number
+): string {
+  const pts = polyline(values, yMin, yMax);
+  if (!pts) return "";
+  const plotW = W - PAD_L - PAD_R;
+  return `${PAD_L},${baselineY.toFixed(2)} ${pts} ${(PAD_L + plotW).toFixed(2)},${baselineY.toFixed(2)}`;
+}
+
 function Chart({
   label,
   values,
@@ -36,6 +50,7 @@ function Chart({
   format,
   baseline,
   baselineLabel,
+  shadeAgainstBaseline = false,
   testId,
 }: {
   label: string;
@@ -46,6 +61,8 @@ function Chart({
   format: (n: number) => string;
   baseline?: number;
   baselineLabel?: string;
+  /** Fill between curve and baseline, tinted by which side it's on. */
+  shadeAgainstBaseline?: boolean;
   testId?: string;
 }) {
   const plotW = W - PAD_L - PAD_R;
@@ -110,7 +127,33 @@ function Chart({
           </>
         )}
 
-        {values.length > 1 ? (
+        {shadeAgainstBaseline && baselineY != null && values.length > 1 && (
+          <>
+            <clipPath id={`${testId}-above`}>
+              <rect x={PAD_L} y={PAD_T} width={plotW} height={Math.max(0, baselineY - PAD_T)} />
+            </clipPath>
+            <clipPath id={`${testId}-below`}>
+              <rect
+                x={PAD_L}
+                y={baselineY}
+                width={plotW}
+                height={Math.max(0, PAD_T + plotH - baselineY)}
+              />
+            </clipPath>
+            <polygon
+              className="chart-area-good"
+              clipPath={`url(#${testId}-above)`}
+              points={areaPolygon(values, yMin, yMax, baselineY)}
+            />
+            <polygon
+              className="chart-area-bad"
+              clipPath={`url(#${testId}-below)`}
+              points={areaPolygon(values, yMin, yMax, baselineY)}
+            />
+          </>
+        )}
+
+        {values.length > 1 && (
           <polyline
             fill="none"
             stroke={color}
@@ -118,10 +161,6 @@ function Chart({
             vectorEffect="non-scaling-stroke"
             points={polyline(values, yMin, yMax)}
           />
-        ) : (
-          <text x={PAD_L + 8} y={H / 2} className="chart-empty">
-            train to see the curve
-          </text>
         )}
 
         {/* x axis */}
@@ -198,12 +237,13 @@ export function MetricsPanel() {
           />
         </div>
 
+        <div className="chart-stack">
         <Chart
           label="Loss"
           values={losses}
           yMin={lossBottom}
           yMax={lossTop}
-          color="var(--accent)"
+          color="var(--series-loss)"
           format={(n) => n.toFixed(3)}
           testId="loss-chart"
         />
@@ -213,12 +253,21 @@ export function MetricsPanel() {
           values={accuracies}
           yMin={0}
           yMax={1}
-          color="var(--accent-2)"
+          color="var(--series-acc)"
           format={(n) => `${Math.round(n * 100)}%`}
           baseline={0.5}
           baselineLabel="chance"
+          shadeAgainstBaseline
           testId="accuracy-chart"
         />
+        {losses.length === 0 && (
+          <PanelState
+            title="No curves yet"
+            hint="Loss and accuracy are recorded per epoch. Press Train."
+            testId="metrics-state"
+          />
+        )}
+        </div>
 
         <div className="text-xs opacity-70">
           Dataset: <strong>{trainConfig.dataset}</strong>

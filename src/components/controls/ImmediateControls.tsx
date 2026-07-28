@@ -20,6 +20,9 @@ export function ImmediateControls() {
   const resetWeights = useAppStore((s) => s.resetWeights);
   const parseAndApplyDsl = useAppStore((s) => s.parseAndApplyDsl);
 
+  const actionError = useAppStore((s) => s.actionError);
+  const clearActionError = useAppStore((s) => s.clearActionError);
+
   const pct = totalEpochs > 0 ? Math.min(100, (epochsRun / totalEpochs) * 100) : 0;
 
   return (
@@ -133,6 +136,20 @@ export function ImmediateControls() {
       >
         {totalEpochs > 0 ? `${epochsRun}/${totalEpochs} ep` : "idle"}
       </span>
+
+      {actionError && (
+        <div className="action-error" role="alert" data-testid="action-error">
+          <span>{actionError}</span>
+          <button
+            type="button"
+            className="action-error-dismiss"
+            aria-label="Dismiss"
+            onClick={() => clearActionError()}
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

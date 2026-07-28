@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { LayerConfig } from "@/engine/types";
+import { PanelState } from "@/components/ui/PanelState";
 import { useAppStore } from "@/store/useAppStore";
 
 /**
@@ -32,6 +33,7 @@ export function NetworkVisualizer() {
   const network = useAppStore((s) => s.network);
   const theme = useAppStore((s) => s.theme);
   const isTraining = useAppStore((s) => s.isTraining);
+  const hasSnapshot = !!snapshot?.layerSnapshots?.length;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -76,6 +78,12 @@ export function NetworkVisualizer() {
         ctx.lineTo(w, y);
         ctx.stroke();
       }
+
+      // Structure comes from the DSL and is real even before training; weights
+      // and activations do not exist yet. Rendering placeholder 0.2 weights and
+      // 0.3 activations made an untrained net look like a weakly trained one,
+      // so an untrained net is drawn deliberately inert instead.
+      const trained = !!snapshot?.layerSnapshots?.length;
 
       const layers = network.layers;
 
@@ -130,7 +138,7 @@ export function NetworkVisualizer() {
         const top = marginTop + (usableH - colH) / 2;
         for (let n = 0; n < count; n++) {
           const y = count === 1 ? marginTop + usableH / 2 : top + spacing * n;
-          let act = 0.3;
+          let act = 0;
           const snapIdx = li - 1;
           const acts = snapshot?.layerSnapshots?.[snapIdx]?.activations;
           if (acts && acts.length) act = acts[n] ?? acts[n % acts.length]!;
@@ -146,15 +154,23 @@ export function NetworkVisualizer() {
         const snap = snapshot?.layerSnapshots?.[li];
         for (let i = 0; i < a.length; i++) {
           for (let j = 0; j < b.length; j++) {
-            const weight = snap?.weights?.[j]?.[i] ?? 0.2;
-            const mag = Math.min(1, Math.abs(weight) * 2);
+            const weight = snap?.weights?.[j]?.[i];
             ctx.beginPath();
             ctx.moveTo(a[i]!.x, a[i]!.y);
             ctx.lineTo(b[j]!.x, b[j]!.y);
-            ctx.strokeStyle = `rgba(${weight >= 0 ? posColor : negColor},${
-              0.08 + mag * 0.6
-            })`;
-            ctx.lineWidth = 0.5 + mag * 2.5;
+            if (!trained || weight == null) {
+              // No sign and no magnitude to show — just that a connection exists.
+              ctx.strokeStyle = isRetro
+                ? "rgba(85,255,255,0.22)"
+                : "rgba(255,255,255,0.13)";
+              ctx.lineWidth = 1;
+            } else {
+              const mag = Math.min(1, Math.abs(weight) * 2);
+              ctx.strokeStyle = `rgba(${weight >= 0 ? posColor : negColor},${
+                0.08 + mag * 0.6
+              })`;
+              ctx.lineWidth = 0.5 + mag * 2.5;
+            }
             ctx.stroke();
           }
         }
@@ -164,10 +180,12 @@ export function NetworkVisualizer() {
       const radius = Math.max(5, Math.min(9, usableH / 24));
       for (const col of positions) {
         for (const node of col) {
-          const glow = Math.max(0, Math.min(1, Math.abs(node.act)));
+          const glow = trained
+            ? Math.max(0, Math.min(1, Math.abs(node.act)))
+            : 0;
           const r = radius + glow * 4;
 
-          if (!isRetro) {
+          if (!isRetro && trained) {
             const g = ctx.createRadialGradient(
               node.x,
               node.y,
@@ -186,7 +204,13 @@ export function NetworkVisualizer() {
 
           ctx.beginPath();
           ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-          if (isRetro) {
+          if (!trained) {
+            // Outline only: the unit exists, its activation doesn't yet.
+            ctx.fillStyle = isRetro ? "#000088" : "#0d1522";
+            ctx.strokeStyle = isRetro
+              ? "rgba(85,255,255,0.5)"
+              : "rgba(255,255,255,0.28)";
+          } else if (isRetro) {
             ctx.fillStyle = glow > 0.5 ? "#ffff55" : "#55ffff";
             ctx.strokeStyle = "#ffffff";
           } else {
@@ -218,7 +242,7 @@ export function NetworkVisualizer() {
       // Weight-sign legend, abbreviated when the panel is too narrow for the
       // full wording rather than letting it run off the edge.
       ctx.font = "10px ui-monospace, monospace";
-      ctx.globalAlpha = 0.8;
+      ctx.globalAlpha = trained ? 0.8 : 0;
       const longLegend = w >= 270;
       const posLabel = longLegend ? "— positive weight" : "— positive";
       const negLabel = longLegend ? "— negative weight" : "— negative";
@@ -274,8 +298,15 @@ export function NetworkVisualizer() {
           {isTraining ? "updating…" : "activations · weights"}
         </span>
       </div>
-      <div ref={wrapRef} className="min-h-0 flex-1">
+      <div ref={wrapRef} className="panel-body">
         <canvas ref={canvasRef} className="block" />
+        {!hasSnapshot && (
+          <PanelState
+            title="Not trained yet"
+            hint="The architecture comes from your DSL. Weights and activations appear once you train."
+            testId="network-state"
+          />
+        )}
       </div>
     </div>
   );

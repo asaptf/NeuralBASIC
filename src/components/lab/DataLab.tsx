@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { getDataset } from "@/engine";
 import type { Sample, TrainStepResult } from "@/engine/types";
+import { PanelState } from "@/components/ui/PanelState";
 import { useAppStore } from "@/store/useAppStore";
 
 /**
@@ -108,6 +109,8 @@ export function DataLab() {
       : `${dataset}: ${wrong} of ${total} points on the wrong side of the boundary.`;
   }, [dataset, snapshot]);
 
+  const plottable = is2d(getDataset(dataset).samples);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
@@ -134,23 +137,8 @@ export function DataLab() {
       const ds = getDataset(dataset);
 
       // Non-2D datasets (images / text) have no meaningful scatter plane.
-      if (!is2d(ds.samples)) {
-        ctx.fillStyle = p.text;
-        ctx.font = "12px ui-monospace, monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(
-          `“${dataset}” is not a 2-D dataset —`,
-          w / 2,
-          h / 2 - 10
-        );
-        ctx.fillText(
-          "watch the network panel and metrics instead.",
-          w / 2,
-          h / 2 + 10
-        );
-        ctx.textAlign = "left";
-        return;
-      }
+      // The explanation lives in the PanelState overlay, not in the bitmap.
+      if (!is2d(ds.samples)) return;
 
       // Plot frame: prefer the grid's own bounds so boundary and points align.
       const grid = snapshot?.decisionGrid;
@@ -225,13 +213,6 @@ export function DataLab() {
       } else {
         ctx.fillStyle = "rgba(255,255,255,0.03)";
         ctx.fillRect(padL, padT, plotW, plotH);
-        ctx.fillStyle = p.text;
-        ctx.globalAlpha = 0.55;
-        ctx.font = "11px ui-monospace, monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("press Train to see the decision boundary", padL + plotW / 2, padT + 18);
-        ctx.textAlign = "left";
-        ctx.globalAlpha = 1;
       }
 
       // ── axes ──
@@ -332,13 +313,28 @@ export function DataLab() {
         <span>Data &amp; Decision Boundary</span>
         <span className="panel-header-note">{dataset}</span>
       </div>
-      <div ref={wrapRef} className="min-h-0 flex-1">
+      <div ref={wrapRef} className="panel-body">
         <canvas
           ref={canvasRef}
           className="block"
           role="img"
           aria-label={summary}
         />
+        {!plottable ? (
+          <PanelState
+            title={`“${dataset}” has no 2-D plane to plot`}
+            hint="Its inputs aren't two features, so there's no boundary to draw. Watch the network panel and metrics instead."
+            testId="lab-state"
+          />
+        ) : (
+          !snapshot?.decisionGrid && (
+            <PanelState
+              title="Not trained yet"
+              hint="The data is plotted. Press Train to draw the decision boundary over it."
+              testId="lab-state"
+            />
+          )
+        )}
       </div>
       <p
         className="lab-summary"
