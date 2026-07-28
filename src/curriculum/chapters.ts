@@ -96,7 +96,7 @@ That's the real damage from too high a rate, and it's why you should watch **los
 }
 train dataset=moons lr=20 epochs=200`,
           expect:
-            "Accuracy lands near 82% — much like lr=0.8 — but the loss sits around 2.2 instead of 0.3, roughly seven times higher. Edit lr back to 0.8, train again, and watch the accuracy hold while the loss collapses.",
+            "Accuracy lands near 82% — much like lr=0.8 — but the loss balloons to several times its old value, instead of 0.3. How far it balloons varies a lot between runs, which is itself the point: the high-rate model is unstable. Edit lr back to 0.8, train again, and watch the accuracy hold while the loss collapses.",
         },
       },
       {
@@ -345,6 +345,116 @@ y = σ(W₂h + b₂)
 Hidden units create **piecewise** decision regions. XOR becomes solvable.
 
 **Try:** change hidden size (4 vs 16) and activation. Watch the decision boundary morph in Immediate Mode.`,
+    lesson: [
+      {
+        heading: "Combining lines instead of drawing a better one",
+        body: `Chapter 1 ended at a wall: one neuron gets one straight line, and XOR needs more than that. The fix is not a cleverer line. It's **several** lines plus something that combines them.
+
+Put a layer of neurons between the input and the output. Each hidden neuron does exactly what the Chapter 1 neuron did — computes a score, squashes it — so each one carves the plane with its own line. The output neuron then looks at *their* answers rather than at the raw inputs, and asks a question about the combination: "which side of line A *and* which side of line B?"
+
+That composition is what buys you a bent boundary. Regions, not halves.`,
+      },
+      {
+        heading: "The trap: depth is worthless without nonlinearity",
+        body: `Before adding a hidden layer, it's worth understanding what makes it work — because it is easy to add one that does nothing at all.
+
+Stack two layers with **no** activation between them and you have applied one matrix, then another. But a matrix times a matrix is just... another matrix. Two linear maps compose into a single linear map, which is a single line. The network has more numbers in it and exactly the same power.
+
+This isn't a subtlety you have to take on trust. Run the example: a hidden layer with \`activation=linear\` parks at **50% on XOR** — chance — and it stays at 50% whether the hidden layer has 4 units or 16. Width cannot rescue a model that has no nonlinearity, because the problem isn't capacity, it's shape.
+
+The activation function is not a performance tweak. It is the thing that makes depth mean anything.`,
+        example: {
+          label: "Watch a linear hidden layer fail",
+          dsl: `network LinearTrap {
+  dense 2 -> 16 activation=linear
+  dense 16 -> 1 activation=sigmoid
+}
+train dataset=xor lr=0.35 epochs=500`,
+          expect:
+            "Accuracy stays around 50% — chance, no better than the single neuron, despite 16 hidden units. Change activation=linear to activation=relu and the same network suddenly solves it.",
+        },
+      },
+      {
+        heading: "Representable is not the same as findable",
+        body: `Textbooks will tell you two hidden units are enough to represent XOR. That's true, and it's also misleading, because you don't get to place the weights by hand — gradient descent has to *find* them from a random start.
+
+Measured on this engine over **forty runs per width**, single ReLU hidden layer, counting a run as solved at \u2265 99% accuracy:
+
+- **2 hidden units** — solved 15% of runs
+- **3 units** — 20%
+- **4 units** — 20%
+- **8 units** — 75%
+- **16 units** — 100%
+
+The theoretical minimum works about one time in seven. Extra units give gradient descent more chances to stumble into a workable arrangement: with sixteen, some pair of them lands somewhere useful early and the rest follows.
+
+Note also that 3 and 4 units are indistinguishable here. Capacity doesn't buy reliability smoothly — there's a threshold, and below it you are mostly buying lottery tickets.
+
+This gap between "a solution exists in there" and "training reliably reaches it" is one of the most practically important things in the subject, and it never shows up in the equations.`,
+        example: {
+          label: "Give XOR sixteen hidden units",
+          dsl: `network MLP {
+  dense 2 -> 16 activation=relu
+  dense 16 -> 1 activation=sigmoid
+}
+train dataset=xor lr=0.35 epochs=500`,
+          expect:
+            "Solves XOR in about 98 runs out of 100, landing from 75% to 100% across attempts, and the Data Lab finally shows a bent boundary with no points ringed. Edit 16 down to 2 and train repeatedly \u2014 it will mostly fail, which is the point.",
+        },
+      },
+      {
+        heading: "Which activation, honestly",
+        body: `The folklore is "use ReLU". Here's what actually happened on XOR with eight hidden units, **sixty runs each**:
+
+- **sigmoid** — solved 97% of runs
+- **tanh** — 93%
+- **relu** — 78%
+
+ReLU came last, by a clear margin. That should make you suspicious of received wisdom applied out of context.
+
+Worth noting how this was found: an earlier eight-run sample had ReLU and tanh tied at 88% and sigmoid at a flawless 100%. All three numbers were wrong, and the ordering of ReLU against tanh was wrong too. Small samples of a random process are how confident false beliefs get made — including in published work. Sixty runs cost seconds here; take them.
+
+ReLU's real advantages are about **deep** networks: sigmoid and tanh squash their input into a narrow range, so gradients shrink as they pass back through many layers until early layers barely learn — the vanishing-gradient problem. ReLU passes positive values through untouched, so the signal survives depth. On a two-layer network solving four points, there is no depth for gradients to vanish through, and that advantage simply doesn't apply.
+
+ReLU has a cost too: it outputs exactly zero for any negative input, so a unit pushed firmly negative receives no gradient and can stop learning altogether — a "dead" unit. With few units that's expensive, which is part of why narrow ReLU nets fail as often as they do above.
+
+Use ReLU by default in deep networks because the reason for it holds there. Don't carry the habit into places where you can just measure.`,
+        example: {
+          label: "Try sigmoid hidden units on XOR",
+          dsl: `network SigmoidMLP {
+  dense 2 -> 8 activation=sigmoid
+  dense 8 -> 1 activation=sigmoid
+}
+train dataset=xor lr=0.35 epochs=500`,
+          expect:
+            "Solves it in about 99 runs out of 100, landing from 75% to 100% across attempts \u2014 so train it more than once before judging. Swap the hidden activation to relu and repeat: it fails noticeably more often.",
+        },
+      },
+      {
+        heading: "Depth is not free either",
+        body: `If one hidden layer helps, two should help more. Measured, at eight units per layer on XOR:
+
+- **one ReLU hidden layer** — 7/8
+- **two ReLU hidden layers** — 5/8
+
+It got *worse*. More layers mean more ways for the random start to go wrong, more dead units, and a longer path for the gradient to travel — and XOR simply doesn't need the extra expressiveness, so all you've added is difficulty.
+
+Depth pays when the problem genuinely has hierarchical structure: edges into shapes into objects. Four points in a plane do not. Reach for capacity when your model is failing because it's too simple, and check by measuring rather than assuming.`,
+      },
+      {
+        heading: "Common traps",
+        body: `- **"Adding layers adds power."** Only with a nonlinearity between them. Without one you've added parameters and nothing else — the 50% result above.
+- **"It failed, so the architecture is wrong."** At narrow widths the same architecture succeeds and fails across runs on identical settings. Train three times before concluding anything.
+- **"ReLU is always the right default."** It is a good default *in deep networks*, for a specific reason that doesn't apply to a two-layer toy.
+- **Reading the hidden layer as human features.** Hidden units aren't "the vertical detector" and "the diagonal detector". They're whatever arrangement of lines gradient descent happened to find, usually redundant and rarely interpretable.`,
+      },
+      {
+        heading: "Where this goes next",
+        body: `You now have a model that can bend its boundary as much as you like — and that turns out to be a new problem rather than the end of them.
+
+A network with enough capacity can carve a region around *every single training point*, scoring perfectly on the data you gave it while learning nothing transferable. Chapter 3 hands you a deliberately oversized network and lets you watch it do exactly that, then introduces the tools for reining it back in.`,
+      },
+    ],
     starterDSL: defaultStarterDSL("ch2"),
     challenges: [
       {
