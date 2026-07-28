@@ -66,6 +66,8 @@ const TRAIN_KEYS = new Set([
   "batch",
   "batchsize",
   "shuffle",
+  "val",
+  "valratio",
 ]);
 
 const DENSE_KEYS = new Set(["activation"]);
@@ -305,7 +307,7 @@ function parseTrainLine(line: string, lineNo: number): Partial<TrainConfig> {
   for (const key of kvs.keys()) {
     if (!TRAIN_KEYS.has(key.toLowerCase())) {
       throw new DSLParseError(
-        `Unknown train parameter \`${key}\`. Valid keys: lr, epochs, dataset, batch, shuffle.`,
+        `Unknown train parameter \`${key}\`. Valid keys: lr, epochs, dataset, batch, shuffle, val.`,
         lineNo
       );
     }
@@ -349,6 +351,20 @@ function parseTrainLine(line: string, lineNo: number): Partial<TrainConfig> {
 
   if (kvs.has("shuffle")) {
     out.shuffle = parseBoolean(kvs.get("shuffle")!, "shuffle", lineNo);
+  }
+
+  const valRaw = kvs.get("val") ?? kvs.get("valratio");
+  if (valRaw !== undefined) {
+    // Allow 0 (disable split) through values in (0, 1). Reject 1 and above —
+    // a 100% hold-out would leave nothing to train on.
+    const n = parseFiniteNumber(valRaw, "val", lineNo);
+    if (n < 0 || n >= 1) {
+      throw new DSLParseError(
+        `\`val\` must be in [0, 1), got \`${valRaw}\`. Use 0 to disable the hold-out, e.g. \`val=0.25\`.`,
+        lineNo
+      );
+    }
+    out.valRatio = n;
   }
 
   // Reject leftover non-kv tokens after `train`
@@ -691,6 +707,7 @@ export function toDSL(network: NetworkConfig, train: TrainConfig): string {
   ];
   if (train.batchSize != null) trainParts.push(`batch=${train.batchSize}`);
   if (train.shuffle != null) trainParts.push(`shuffle=${train.shuffle}`);
+  if (train.valRatio != null) trainParts.push(`val=${train.valRatio}`);
   lines.push(trainParts.join(" "));
   return lines.join("\n");
 }

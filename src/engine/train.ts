@@ -11,9 +11,15 @@ import {
   type DenseLayerState,
   type Model,
 } from "./model";
+import {
+  resolveValRatio,
+  splitTrainVal,
+  type DataSplit,
+} from "./split";
 import type {
   LayerWeights,
   NetworkConfig,
+  Sample,
   TrainConfig,
   TrainHistory,
   TrainStepResult,
@@ -676,6 +682,12 @@ export interface TrainingSession {
   readonly isDone: boolean;
   readonly losses: number[];
   readonly accuracies: number[];
+  /** Per-epoch held-out loss (empty when no validation split). */
+  readonly valLosses: number[];
+  /** Per-epoch held-out accuracy (empty when no validation split). */
+  readonly valAccuracies: number[];
+  /** True when this session computed a held-out split. */
+  readonly hasValidation: boolean;
   readonly lastSnapshot: TrainStepResult | null;
   exportWeights(): LayerWeights[];
   /** Fresh random init, clears history, epochsRun = 0. */
@@ -739,13 +751,23 @@ function shuffleInPlace<T>(arr: T[]): void {
   }
 }
 
+/**
+ * Build the train/val split once per run from the cached dataset.
+ * Training code only ever receives `split.train` as the optimizable sample list.
+ */
+export function prepareDataSplit(trainConfig: TrainConfig): DataSplit {
+  const ds = getDataset(trainConfig.dataset);
+  return splitTrainVal(ds.samples, resolveValRatio(trainConfig.valRatio));
+}
+
 /** Run a single epoch body (identical path for train() and TrainingSession). */
 function runOneEpoch(
   model: Model,
   trainConfig: TrainConfig,
   options: TrainOptions,
   epoch: number,
-  samplesWork: { x: number[]; y: number[] }[]
+  samplesWork: Sample[],
+  valSamples: Sample[] | null
 ): TrainStepResult {
   const ds = getDataset(trainConfig.dataset);
   const l2 = model.config.l2 ?? 0;
@@ -755,6 +777,7 @@ function runOneEpoch(
     options.maxSamples ??
     (heavy ? Math.min(samplesWork.length, 14) : samplesWork.length);
 
+  // Shuffle only the training copy — val is never mixed into the optimizer path.
   if (trainConfig.shuffle !== false) {
     shuffleInPlace(samplesWork);
   }
@@ -768,6 +791,13 @@ function runOneEpoch(
 
   const loss = epochLoss(model, samplesWork, l2);
   const accuracy = accuracyOn(model, samplesWork);
+
+  let valLoss: number | null = null;
+  let valAccuracy: number | null = null;
+  if (valSamples && valSamples.length > 0) {
+    valLoss = epochLoss(model, valSamples, l2);
+    valAccuracy = accuracyOn(model, valSamples);
+  }
 
   const is2d =
     ds.inputShape.length === 1 && ds.inputShape[0] === 2;
@@ -788,6 +818,8 @@ function runOneEpoch(
     epoch,
     loss,
     accuracy,
+    valLoss,
+    valAccuracy,
     layerSnapshots: snapshotLayers(model),
     predictions: samplesWork.slice(0, 8).map((s) => predict(model, s.x)),
     decisionGrid,
@@ -799,30 +831,46 @@ function runOneEpoch(
 
 /**
  * Train model for N epochs. Immediate Mode: call with new configs freely.
+ * Metrics `loss`/`accuracy` are train-set only; `valLoss`/`valAccuracy` are held-out.
  */
 export function train(
   model: Model,
   trainConfig: TrainConfig,
   options: TrainOptions = {}
 ): TrainHistory {
-  const ds = getDataset(trainConfig.dataset);
-  const samples = ds.samples.slice();
+  const split = prepareDataSplit(trainConfig);
+  // Working train copy only — structurally cannot train on val.
+  const samples = split.train.slice();
+  const valSamples = split.val;
   const losses: number[] = [];
   const accuracies: number[] = [];
+  const valLosses: number[] = [];
+  const valAccuracies: number[] = [];
   let last: TrainStepResult = {
     epoch: 0,
     loss: 0,
     accuracy: 0,
+    valLoss: null,
+    valAccuracy: null,
     layerSnapshots: snapshotLayers(model),
   };
 
   for (let epoch = 1; epoch <= trainConfig.epochs; epoch++) {
-    last = runOneEpoch(model, trainConfig, options, epoch, samples);
+    last = runOneEpoch(
+      model,
+      trainConfig,
+      options,
+      epoch,
+      samples,
+      valSamples
+    );
     losses.push(last.loss);
     accuracies.push(last.accuracy);
+    if (last.valLoss != null) valLosses.push(last.valLoss);
+    if (last.valAccuracy != null) valAccuracies.push(last.valAccuracy);
   }
 
-  return { losses, accuracies, final: last };
+  return { losses, accuracies, valLosses, valAccuracies, final: last };
 }
 
 /**
@@ -835,7 +883,9 @@ export function createTrainingSession(
   options: TrainOptions = {}
 ): TrainingSession {
   const prepared = prepareNetworkConfig(config, trainConfig.dataset);
-  const ds = getDataset(trainConfig.dataset);
+  const split = prepareDataSplit(trainConfig);
+  // Val list is frozen for the session lifetime; only train is reshuffled.
+  const valSamples = split.val;
   let model = createModel(prepared.config, prepared.inputDim);
   if (options.initialWeights) {
     loadWeights(model, options.initialWeights);
@@ -843,9 +893,11 @@ export function createTrainingSession(
   let epochsRun = 0;
   const losses: number[] = [];
   const accuracies: number[] = [];
+  const valLosses: number[] = [];
+  const valAccuracies: number[] = [];
   let lastSnapshot: TrainStepResult | null = null;
-  // Working copy reshuffled each epoch (same as train())
-  let samplesWork = ds.samples.slice();
+  // Working train copy only — never includes held-out samples.
+  let samplesWork = split.train.slice();
 
   const reinitModel = () => {
     model = createModel(prepared.config, prepared.inputDim);
@@ -863,6 +915,8 @@ export function createTrainingSession(
           epoch: 0,
           loss: 0,
           accuracy: 0,
+          valLoss: null,
+          valAccuracy: null,
           layerSnapshots: snapshotLayers(model),
         };
         lastSnapshot = empty;
@@ -874,11 +928,14 @@ export function createTrainingSession(
         trainConfig,
         options,
         epoch,
-        samplesWork
+        samplesWork,
+        valSamples
       );
       epochsRun = epoch;
       losses.push(result.loss);
       accuracies.push(result.accuracy);
+      if (result.valLoss != null) valLosses.push(result.valLoss);
+      if (result.valAccuracy != null) valAccuracies.push(result.valAccuracy);
       lastSnapshot = result;
       return result;
     },
@@ -897,6 +954,15 @@ export function createTrainingSession(
     get accuracies() {
       return accuracies;
     },
+    get valLosses() {
+      return valLosses;
+    },
+    get valAccuracies() {
+      return valAccuracies;
+    },
+    get hasValidation() {
+      return split.splitApplied;
+    },
     get lastSnapshot() {
       return lastSnapshot;
     },
@@ -908,8 +974,10 @@ export function createTrainingSession(
       epochsRun = 0;
       losses.length = 0;
       accuracies.length = 0;
+      valLosses.length = 0;
+      valAccuracies.length = 0;
       lastSnapshot = null;
-      samplesWork = ds.samples.slice();
+      samplesWork = split.train.slice();
     },
   };
 

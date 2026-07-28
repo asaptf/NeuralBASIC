@@ -53,6 +53,12 @@ export interface TrainConfig {
   batchSize?: number;
   dataset: DatasetName;
   shuffle?: boolean;
+  /**
+   * Fraction of each class held out for validation metrics (0–1 exclusive).
+   * Omitted → engine default (see DEFAULT_VAL_RATIO). Explicit 0 disables the split
+   * (useful for tiny logic sets where a hold-out is meaningless).
+   */
+  valRatio?: number;
 }
 
 export type DatasetName =
@@ -93,8 +99,19 @@ export interface LayerSnapshot {
 
 export interface TrainStepResult {
   epoch: number;
+  /** Mean train-set loss (samples the optimizer saw this run). */
   loss: number;
+  /** Train-set accuracy. */
   accuracy: number;
+  /**
+   * Held-out loss for this epoch, or `null` when no validation split was applied
+   * (tiny datasets, valRatio=0). Always present so UI can branch on null vs number.
+   */
+  valLoss?: number | null;
+  /**
+   * Held-out accuracy for this epoch, or `null` when no validation split.
+   */
+  valAccuracy?: number | null;
   layerSnapshots: LayerSnapshot[];
   predictions?: number[][];
   decisionGrid?: {
@@ -110,8 +127,20 @@ export interface TrainStepResult {
 }
 
 export interface TrainHistory {
+  /** Per-epoch train loss (same length as `accuracies`). */
   losses: number[];
+  /** Per-epoch train accuracy. */
   accuracies: number[];
+  /**
+   * Per-epoch held-out loss. Empty when no validation split was applied;
+   * otherwise same length as `losses`.
+   */
+  valLosses?: number[];
+  /**
+   * Per-epoch held-out accuracy. Empty when no validation split;
+   * otherwise same length as `accuracies`.
+   */
+  valAccuracies?: number[];
   final: TrainStepResult;
 }
 

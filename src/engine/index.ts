@@ -10,6 +10,7 @@
 export * from "./types";
 export * from "./math";
 export * from "./datasets";
+export * from "./split";
 export * from "./model";
 export * from "./train";
 export * from "./dsl";
