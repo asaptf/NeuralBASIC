@@ -1,26 +1,692 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ─── Theme tokens ─── */
+:root,
+html[data-theme="modern"],
+.ide-root[data-theme="modern"] {
+  --bg: #070b12;
+  --bg-elevated: #0d1420;
+  --bg-panel: #0f1724;
+  --border: rgba(0, 255, 200, 0.12);
+  --text: #e8f5f1;
+  --text-dim: #8aa89c;
+  --accent: #00ffc8;
+  --accent-2: #7c5cff;
+  --danger: #ff4d6d;
+  --glow: 0 0 24px rgba(0, 255, 200, 0.15);
+  --font-ui: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --radius: 10px;
+  --header-bg: linear-gradient(180deg, #101a2a 0%, #0a1018 100%);
+  color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html[data-theme="retro"],
+.ide-root[data-theme="retro"] {
+  --bg: #0000aa;
+  --bg-elevated: #0000aa;
+  --bg-panel: #000088;
+  --border: #55ffff;
+  --text: #ffffff;
+  --text-dim: #55ffff;
+  --accent: #ffff55;
+  --accent-2: #55ff55;
+  --danger: #ff5555;
+  --glow: none;
+  --font-ui: var(--font-plex-mono), "Courier New", monospace;
+  --font-mono: var(--font-plex-mono), "Courier New", monospace;
+  --radius: 0px;
+  --header-bg: #0000aa;
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+
+/* ─── IDE chrome ─── */
+.ide-root {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.ide-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--glow);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.logo-mark {
+  color: var(--accent);
+  text-shadow: 0 0 12px var(--accent);
+}
+
+.ide-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 11px;
+  border-top: 1px solid var(--border);
+  opacity: 0.85;
+}
+
+.immediate-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 12px;
+}
+
+.control span {
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+
+.control input,
+.control select,
+.input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.control input {
+  width: 5.5rem;
+}
+
+.btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.65rem;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.theme-toggle button {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 0.35rem 0.55rem;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.theme-toggle button.active {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+}
+
+/* ─── Grid layout (tablet-first) ───
+   Every track is minmax(0, …): a bare `1fr` resolves its min size to the
+   content's min-content width, and Monaco's min-content is wide enough to
+   crush the visualisation columns down to a sliver. */
+.ide-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows:
+    minmax(260px, 1.2fr)
+    minmax(200px, 0.9fr)
+    minmax(180px, 0.8fr)
+    minmax(170px, 0.7fr);
+  grid-template-areas:
+    "lab lab"
+    "curriculum editor"
+    "network metrics"
+    "tutor tutor";
+}
+
+/* Desktop: the lab is the largest surface on screen, spanning both rows. */
+@media (min-width: 1024px) {
+  .ide-grid {
+    grid-template-columns:
+      minmax(240px, 280px)
+      minmax(0, 0.85fr)
+      minmax(0, 1.35fr)
+      minmax(280px, 320px);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "curriculum editor  lab metrics"
+      "curriculum network lab tutor";
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (max-width: 767px) {
+  .ide-grid {
+    grid-template-columns: minmax(0, 1fr);
+    /* Every row needs a px floor. The panels size their bodies with
+       `flex-1 min-h-0`, so an `auto` row has no intrinsic height to measure
+       and collapses to its borders (~2px). */
+    grid-template-rows:
+      minmax(300px, 45vh)
+      minmax(340px, auto)
+      minmax(200px, 32vh)
+      minmax(220px, 35vh)
+      minmax(380px, auto)
+      minmax(300px, auto);
+    grid-template-areas:
+      "lab"
+      "curriculum"
+      "editor"
+      "network"
+      "metrics"
+      "tutor";
+    overflow: auto;
+  }
+}
+
+.cell-curriculum {
+  grid-area: curriculum;
+  min-height: 0;
+  min-width: 0;
+}
+.cell-editor {
+  grid-area: editor;
+  min-height: 0;
+  min-width: 0;
+}
+.cell-lab {
+  grid-area: lab;
+  min-height: 0;
+  min-width: 0;
+}
+.cell-viz {
+  grid-area: network;
+  min-height: 0;
+  min-width: 0;
+}
+.cell-metrics {
+  grid-area: metrics;
+  min-height: 0;
+  min-width: 0;
+}
+.cell-tutor {
+  grid-area: tutor;
+  min-height: 0;
+  min-width: 0;
+}
+
+.panel {
+  height: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--glow);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.65rem;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.metric-card {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.chat-bubble {
+  border-radius: var(--radius);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+}
+
+.chat-tutor {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.chat-user {
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+  margin-left: 1rem;
+}
+
+.chapter-tab {
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.chapter-tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: var(--glow);
+}
+
+.chapter-tab.done {
+  background: color-mix(in srgb, var(--accent-2) 25%, transparent);
+}
+
+.chapter-tab:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.challenge-item {
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.challenge-item.active {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.challenge-item.completed {
+  border-color: color-mix(in srgb, var(--accent-2) 50%, transparent);
+}
+
+/* Retro CRT-ish scan feel */
+html[data-theme="retro"] .ide-root::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+  z-index: 50;
+}
+
+html[data-theme="retro"] .btn,
+html[data-theme="retro"] .input,
+html[data-theme="retro"] .control input,
+html[data-theme="retro"] .control select {
+  border-width: 2px;
+  text-transform: uppercase;
+}
+
+html[data-theme="retro"] .panel-header {
+  background: #0000cc;
+  color: #ffff55;
+}
+
+/* ─── Panels & typography ───
+   Tablet-first means readable body copy and finger-sized targets, so the
+   smallest text in the app is 11px and interactive rows clear 36px. */
+.panel-header-note {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.7;
+  letter-spacing: 0.02em;
+}
+
+.btn {
+  min-height: 34px;
+}
+
+.control input,
+.control select,
+.input {
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.theme-toggle button {
+  min-height: 34px;
+  font-size: 12px;
+}
+
+.chapter-tab {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  font-size: 13px;
+}
+
+.parse-error {
+  border-top: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+  padding: 0.4rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* ─── Markdown ─── */
+.md {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.md-p {
+  margin: 0 0 0.7rem;
+}
+
+.md-p:last-child {
+  margin-bottom: 0;
+}
+
+.md-list {
+  margin: 0 0 0.7rem;
+  padding-left: 1.1rem;
+  list-style: disc;
+}
+
+.md-list li {
+  margin-bottom: 0.25rem;
+}
+
+.md-code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 0.08em 0.35em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.md-formula {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  text-align: center;
+  padding: 0.55rem 0.5rem;
+  margin: 0 0 0.7rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+/* ─── Metrics ─── */
+.metric-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+}
+
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.metric-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.metric-hint.good {
+  color: var(--accent);
+}
+
+.metric-hint.bad {
+  color: var(--danger);
+}
+
+.chart-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  margin-bottom: 0.2rem;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-frame {
+  fill: color-mix(in srgb, var(--bg) 55%, transparent);
+  stroke: var(--border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-tick {
+  fill: var(--text);
+  opacity: 0.55;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.chart-baseline {
+  stroke: var(--text-dim);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-empty {
+  fill: var(--text);
+  opacity: 0.45;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* ─── Curriculum & challenges ─── */
+.challenge-item {
+  min-height: 40px;
+}
+
+.challenge-step {
+  border-left: 2px solid var(--border);
+  padding-left: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.challenge-step.is-locked {
+  opacity: 0.45;
+}
+
+.challenge-step.is-done {
+  border-left-color: var(--accent);
+}
+
+.step-kind {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  margin-bottom: 0.3rem;
+}
+
+.step-badge {
+  font-size: 10px;
+  padding: 0.05rem 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  opacity: 0.9;
+}
+
+.step-badge.done {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.choice-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  min-height: 38px;
+  margin-bottom: 0.3rem;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.choice-btn.chosen-wrong {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.choice-btn.chosen-right {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.step-feedback {
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.step-feedback.ok {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.step-feedback.nudge {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+.locked-note {
+  font-size: 11px;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* Text mirror of the Data Lab canvas — the canvas itself is opaque to screen
+   readers, and the misclassified count is the point of the panel. */
+.lab-summary {
+  margin: 0;
+  padding: 0.4rem 0.65rem;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Training transport ─── */
+.train-progress {
+  position: relative;
+  flex: 1;
+  min-width: 90px;
+  max-width: 220px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  overflow: hidden;
+}
+
+.train-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 80ms linear;
+}
+
+.train-epoch-readout {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+  min-width: 5.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .train-progress-fill {
+    transition: none;
+  }
 }

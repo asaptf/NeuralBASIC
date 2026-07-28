@@ -1,27 +1,43 @@
 {
-  "name": "neuralbasic-tmp",
+  "name": "neuralbasic",
   "version": "0.1.0",
   "private": true,
+  "description": "Immediate-mode educational IDE for learning neural networks by building them: live decision boundaries, a Socratic tutor, and a curriculum gated by demonstrated understanding.",
+  "license": "Apache-2.0",
+  "author": "Andrey Sapunov",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.27.0",
+    "next": "15.5.22",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.5.22"
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
+    "@vitejs/plugin-react": "^6.0.4",
     "eslint": "^9",
     "eslint-config-next": "15.5.22",
-    "@eslint/eslintrc": "^3"
+    "jsdom": "^29.1.1",
+    "playwright": "^1.62.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
