@@ -342,15 +342,13 @@ export function DataLab() {
               testId="lab-state"
             />
           )
-        ) : (
-          !snapshot?.decisionGrid && (
-            <PanelState
-              title="Not trained yet"
-              hint="The data is plotted. Press Train to draw the decision boundary over it."
-              testId="lab-state"
-            />
-          )
-        )}
+        ) : null}
+        {/* No overlay for "plotted but not trained": the summary line below the
+            canvas already says exactly that, and it covers nothing. An overlay
+            here can only sit on top of the data — centred it hid the lower
+            crescent of `moons`, and anchored to the bottom it hid XOR's bottom
+            row along with the axis labels and the legend. The panel isn't
+            empty, so it doesn't need an empty state. */}
       </div>
       <p
         className="lab-summary"

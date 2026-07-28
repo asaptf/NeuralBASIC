@@ -808,6 +808,18 @@ html[data-theme="retro"] .panel-header {
   background: color-mix(in srgb, var(--bg) 35%, transparent);
 }
 
+/* Panels that are drawing real content behind the message keep it uncovered:
+   the plate drops to the bottom edge, and the wash fades out upward so the
+   scatter or layer diagram above stays at full contrast. */
+.panel-state-at-bottom {
+  align-items: flex-end;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--bg) 55%, transparent) 0%,
+    transparent 60%
+  );
+}
+
 .panel-state > * {
   position: relative;
 }

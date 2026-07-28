@@ -313,6 +313,7 @@ export function NetworkVisualizer() {
           <PanelState
             title="Not trained yet"
             hint="The architecture comes from your DSL. Weights and activations appear once you train."
+            anchor="bottom"
             testId="network-state"
           />
         )}

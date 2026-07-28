@@ -15,16 +15,24 @@ export function PanelState({
   title,
   hint,
   tone = "idle",
+  anchor = "center",
   testId,
 }: {
   title: string;
   hint?: string;
   tone?: "idle" | "error";
+  /**
+   * Where the plate sits. `bottom` when the panel is already drawing something
+   * the reader should see — a scatter plot, a layer diagram. Centring the plate
+   * there covers the very thing the copy points at: on `moons` the message
+   * "the data is plotted" sat on top of the lower crescent and hid it.
+   */
+  anchor?: "center" | "bottom";
   testId?: string;
 }) {
   return (
     <div
-      className={`panel-state panel-state-${tone}`}
+      className={`panel-state panel-state-${tone} panel-state-at-${anchor}`}
       role={tone === "error" ? "alert" : "status"}
       data-testid={testId}
     >
