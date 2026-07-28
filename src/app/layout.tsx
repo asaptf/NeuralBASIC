@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, IBM_Plex_Mono } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/**
+ * One type system, two families. IBM Plex pairs a humanist sans with a mono
+ * that shares its skeleton, which suits an IDE whose chrome and prose sit
+ * inches apart — and its lineage is the same computing era the Retro Blue
+ * theme is quoting. Plex Mono's slashed zero also matters in a panel full of
+ * losses and learning rates.
+ */
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-// The Retro Blue theme asks for IBM Plex Mono; without loading it the theme was
-// silently falling back to Courier New.
 const plexMono = IBM_Plex_Mono({
-  variable: "--font-plex-mono",
+  variable: "--font-mono-family",
   subsets: ["latin"],
-  weight: ["400", "600"],
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -39,7 +42,7 @@ export default function RootLayout({
     <html
       lang="en"
       data-theme="modern"
-      className={`${geistSans.variable} ${geistMono.variable} ${plexMono.variable}`}
+      className={`${plexSans.variable} ${plexMono.variable}`}
       suppressHydrationWarning
     >
       <body className="antialiased">{children}</body>

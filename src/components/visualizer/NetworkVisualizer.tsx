@@ -215,13 +215,17 @@ export function NetworkVisualizer() {
       ctx.textAlign = "left";
       ctx.globalAlpha = 1;
 
-      // weight-sign legend
+      // Weight-sign legend, abbreviated when the panel is too narrow for the
+      // full wording rather than letting it run off the edge.
       ctx.font = "10px ui-monospace, monospace";
       ctx.globalAlpha = 0.8;
+      const longLegend = w >= 270;
+      const posLabel = longLegend ? "— positive weight" : "— positive";
+      const negLabel = longLegend ? "— negative weight" : "— negative";
       ctx.fillStyle = `rgb(${posColor})`;
-      ctx.fillText("— positive weight", 10, h - 10);
+      ctx.fillText(posLabel, 10, h - 10);
       ctx.fillStyle = `rgb(${negColor})`;
-      ctx.fillText("— negative weight", 122, h - 10);
+      ctx.fillText(negLabel, 10 + ctx.measureText(posLabel).width + 12, h - 10);
       ctx.globalAlpha = 1;
 
       // attention heatmap (belongs to the network, not the data plane)

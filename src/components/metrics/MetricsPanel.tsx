@@ -3,7 +3,7 @@
 import { useAppStore } from "@/store/useAppStore";
 
 const W = 300;
-const H = 82;
+const H = 74;
 const PAD_L = 34;
 const PAD_R = 6;
 const PAD_T = 8;

@@ -5,6 +5,7 @@ import { ChapterNav } from "@/components/curriculum/ChapterNav";
 import { ImmediateControls } from "@/components/controls/ImmediateControls";
 import { CodeEditor } from "@/components/editor/CodeEditor";
 import { DataLab } from "@/components/lab/DataLab";
+import { Logo } from "@/components/ide/Logo";
 import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { TutorPanel } from "@/components/tutor/TutorPanel";
 import { NetworkVisualizer } from "@/components/visualizer/NetworkVisualizer";
@@ -47,7 +48,7 @@ export function IdeShell() {
       <header className="ide-header">
         <div className="flex items-center gap-3">
           <div className="logo" data-testid="app-logo">
-            <span className="logo-mark">◈</span>
+            <Logo />
             <span className="logo-text">NeuralBASIC</span>
           </div>
           <span className="hidden text-xs opacity-60 sm:inline">
@@ -55,38 +56,40 @@ export function IdeShell() {
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="btn"
-            data-testid="btn-save"
-            onClick={() => saveLocal()}
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            className="btn"
-            data-testid="btn-load"
-            onClick={() => loadLocal()}
-          >
-            Load
-          </button>
-          <button
-            type="button"
-            className="btn"
-            data-testid="btn-export-exp"
-            onClick={() => exportExperimentFile()}
-          >
-            Export JSON
-          </button>
-          <button
-            type="button"
-            className="btn"
-            data-testid="btn-import"
-            onClick={() => fileRef.current?.click()}
-          >
-            Import
-          </button>
+          <div className="btn-cluster" role="group" aria-label="Experiment file actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-save"
+              onClick={() => saveLocal()}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-load"
+              onClick={() => loadLocal()}
+            >
+              Load
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-export-exp"
+              onClick={() => exportExperimentFile()}
+            >
+              Export JSON
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-import"
+              onClick={() => fileRef.current?.click()}
+            >
+              Import
+            </button>
+          </div>
           <input
             ref={fileRef}
             type="file"

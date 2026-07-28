@@ -14,11 +14,34 @@ html[data-theme="modern"],
   --accent-2: #7c5cff;
   --danger: #ff4d6d;
   --glow: 0 0 24px rgba(0, 255, 200, 0.15);
-  --font-ui: var(--font-geist-sans), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-ui: var(--font-sans), system-ui, sans-serif;
+  --font-mono: var(--font-mono-family), ui-monospace, monospace;
   --radius: 10px;
   --header-bg: linear-gradient(180deg, #101a2a 0%, #0a1018 100%);
+  /* Logo tile is a touch deeper than --accent: the neon is tuned for thin
+     strokes on black and glares as a filled area. Matches icon.svg. */
+  --logo-tile: #14e8c0;
+  --logo-curve: #07121b;
   color-scheme: dark;
+}
+
+/* ─── Scale ───
+   Spacing and type were previously ad-hoc (0.35/0.4/0.45/0.55/0.65rem picked
+   per component). These are the only steps the UI should use. */
+:root {
+  --s-1: 0.25rem;
+  --s-2: 0.4rem;
+  --s-3: 0.6rem;
+  --s-4: 0.85rem;
+  --s-5: 1.25rem;
+
+  --t-micro: 10px;
+  --t-small: 11px;
+  --t-body: 13px;
+  --t-lead: 15px;
+  --t-title: 17px;
+
+  --ring: 2px;
 }
 
 html[data-theme="retro"],
@@ -33,10 +56,12 @@ html[data-theme="retro"],
   --accent-2: #55ff55;
   --danger: #ff5555;
   --glow: none;
-  --font-ui: var(--font-plex-mono), "Courier New", monospace;
-  --font-mono: var(--font-plex-mono), "Courier New", monospace;
+  --font-ui: var(--font-mono-family), "Courier New", monospace;
+  --font-mono: var(--font-mono-family), "Courier New", monospace;
   --radius: 0px;
   --header-bg: #0000aa;
+  --logo-tile: #ffff55;
+  --logo-curve: #0000aa;
   color-scheme: dark;
 }
 
@@ -79,9 +104,39 @@ body {
   letter-spacing: 0.02em;
 }
 
-.logo-mark {
-  color: var(--accent);
-  text-shadow: 0 0 12px var(--accent);
+.logo-mark-svg {
+  display: block;
+  flex: none;
+  border-radius: calc(var(--radius) * 0.7);
+}
+
+/* Corner radius follows the theme: Retro Blue is square-cornered everywhere
+   else, so the mark shouldn't be the one rounded thing on screen. `rx` as a
+   CSS property is SVG2; the element's rx attribute is the fallback. */
+.logo-tile {
+  fill: var(--logo-tile);
+  rx: 7px;
+}
+
+html[data-theme="retro"] .logo-tile {
+  rx: 0;
+}
+
+.logo-curve {
+  stroke: var(--logo-curve);
+}
+
+.logo-text {
+  font-size: var(--t-lead);
+}
+
+/* ─── Focus ───
+   Nothing styled :focus-visible before, so keyboard users had only the UA
+   default — which is invisible against these backgrounds. */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: var(--ring) solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
 }
 
 .ide-footer {
@@ -162,6 +217,34 @@ body {
   font-weight: 600;
 }
 
+/* Quiet variant for the file actions in the header. Five equal-weight
+   outlined buttons read as a wall and compete with Train / Export Model,
+   which are the only two things anyone clicks on purpose. */
+.btn-ghost {
+  border-color: transparent;
+  color: var(--text-dim);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text);
+}
+
+/* Groups the quiet actions so they read as one cluster, not four strays. */
+.btn-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+html[data-theme="retro"] .btn-ghost {
+  border-color: transparent;
+}
+
 .theme-toggle {
   display: inline-flex;
   border: 1px solid var(--border);
@@ -210,11 +293,14 @@ body {
 /* Desktop: the lab is the largest surface on screen, spanning both rows. */
 @media (min-width: 1024px) {
   .ide-grid {
+    /* The lab's plot is square, so its size is capped by the narrower axis.
+       Giving the column more width converts leftover vertical slack into a
+       bigger plot; the editor holds a five-line program and doesn't need it. */
     grid-template-columns:
-      minmax(240px, 280px)
-      minmax(0, 0.85fr)
-      minmax(0, 1.35fr)
-      minmax(280px, 320px);
+      minmax(240px, 270px)
+      minmax(340px, 0.8fr)
+      minmax(0, 1.5fr)
+      minmax(280px, 310px);
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
       "curriculum editor  lab metrics"
@@ -300,7 +386,7 @@ body {
 }
 
 .metric-card {
-  padding: 0.5rem 0.65rem;
+  padding: var(--s-2) var(--s-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--bg) 70%, transparent);
@@ -398,11 +484,21 @@ html[data-theme="retro"] .panel-header {
 /* ─── Panels & typography ───
    Tablet-first means readable body copy and finger-sized targets, so the
    smallest text in the app is 11px and interactive rows clear 36px. */
+/* The note is secondary: let it truncate rather than wrap under the title and
+   shove it out of the header. */
 .panel-header-note {
-  font-size: 11px;
+  font-size: var(--t-small);
   font-weight: 500;
   opacity: 0.7;
   letter-spacing: 0.02em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-header > span:first-child {
+  flex: none;
 }
 
 .btn {
@@ -524,6 +620,10 @@ html[data-theme="retro"] .panel-header {
   width: 100%;
   height: auto;
   display: block;
+}
+
+.metric-value {
+  line-height: 1.15;
 }
 
 .chart-frame {

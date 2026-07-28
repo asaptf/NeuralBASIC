@@ -1,0 +1,15 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    A sigmoid — the activation curve the whole curriculum keeps returning to.
+
+    Deliberately inverted (dark curve on a filled tile) rather than a glowing
+    stroke on a dark tile: at 16px a thin stroke on a dark tile dissolves into
+    dark browser chrome, while a filled tile keeps a readable silhouette on
+    light, dark and grey tab strips alike. The fill is a touch deeper than the
+    UI accent (#00FFC8) because that neon is tuned for thin strokes on black
+    and glares when used as a large flat area.
+  -->
+  <rect width="32" height="32" rx="7" fill="#14E8C0"/>
+  <path d="M5 25C11 25 12.5 22.5 14.5 16.5C16.5 10.5 19.5 7 27 7"
+        stroke="#07121B" stroke-width="4.6" stroke-linecap="round" fill="none"/>
+</svg>
