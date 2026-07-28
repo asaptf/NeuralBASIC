@@ -70,7 +70,9 @@ export type DatasetName =
   | "linear"
   | "spiral"
   | "tiny_images"
-  | "tiny_text";
+  | "tiny_text"
+  /** Two moons + deterministic label noise — Chapter 3 overfitting demo. */
+  | "noisy_moons";
 
 export interface Sample {
   x: number[];

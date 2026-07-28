@@ -182,6 +182,94 @@ function makeTinyImages(): Dataset {
 }
 
 /**
+ * Deterministic unit noise in [-1, 1] from sample index + salt.
+ * Used so noisy_* datasets never call Math.random() and stay cache-stable.
+ */
+function detUnit(i: number, salt: number): number {
+  let h = Math.imul(i + 1, 2654435761) ^ Math.imul(salt, 1597334677);
+  h = Math.imul(h ^ (h >>> 16), 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 3266489917);
+  return ((h >>> 0) / 4294967296) * 2 - 1;
+}
+
+/**
+ * Flip a deterministic subset of labels (label noise). Order is content-hash
+ * based so the same geometric points always receive the same flipped labels.
+ */
+function flipLabelsDeterministic(samples: Sample[], flipRate: number): void {
+  if (!(flipRate > 0) || samples.length === 0) return;
+  const order = samples
+    .map((s, i) => {
+      let h = (i + 1) * 2654435761;
+      for (const v of s.x) {
+        h = Math.imul(h ^ (Math.floor(v * 1e6) | 0), 1597334677);
+      }
+      return { i, k: h >>> 0 };
+    })
+    .sort((a, b) => a.k - b.k || a.i - b.i);
+  const nFlip = Math.min(
+    samples.length,
+    Math.max(0, Math.round(samples.length * flipRate))
+  );
+  for (let k = 0; k < nFlip; k++) {
+    const idx = order[k]!.i;
+    const y = samples[idx]!.y[0]!;
+    samples[idx]!.y = [y >= 0.5 ? 0 : 1];
+  }
+}
+
+/**
+ * Two interleaving moons with mild positional jitter **and** label noise.
+ *
+ * Unlike plain `moons` (positional noise only, which a wide net still
+ * generalises), a fixed fraction of labels are flipped. Memorising those
+ * flips drives train accuracy up while held-out accuracy stalls — the
+ * signature Chapter 3 needs. Fully deterministic (no Math.random).
+ *
+ * Measured defaults (n=44, noise=0.12, flip=0.23), 40 runs, val=0.3:
+ *   64×64 l2=0  e500 lr=0.08 → train ~96%  val ~64%  gap ~32pp (min ~21pp)
+ *   64×64 l2=0.005 e300      → train ~82%  val ~75%  (held-out +12pp vs above)
+ *   dense 6 units            → train ~80%  val ~69%  (held-out +5pp vs above)
+ */
+function makeNoisyMoons(
+  n = 44,
+  noise = 0.12,
+  flipRate = 0.23
+): Dataset {
+  const samples: Sample[] = [];
+  const half = Math.floor(n / 2);
+  for (let i = 0; i < half; i++) {
+    const t = (Math.PI * i) / (half - 1 || 1);
+    samples.push({
+      x: [
+        Math.cos(t) + detUnit(i, 11) * noise,
+        Math.sin(t) + detUnit(i, 22) * noise,
+      ],
+      y: [0],
+    });
+  }
+  for (let i = 0; i < n - half; i++) {
+    const t = (Math.PI * i) / (n - half - 1 || 1);
+    samples.push({
+      x: [
+        1 - Math.cos(t) + detUnit(i + half, 11) * noise,
+        0.5 - Math.sin(t) + detUnit(i + half, 22) * noise,
+      ],
+      y: [1],
+    });
+  }
+  flipLabelsDeterministic(samples, flipRate);
+  return {
+    name: "noisy_moons",
+    samples,
+    inputShape: [2],
+    outputDim: 1,
+    kind: "classification",
+    featureNames: ["x", "y"],
+  };
+}
+
+/**
  * Tiny text: bag-of-words style binary sentiment on fixed 8-dim one-hot features.
  * Features: [good, bad, love, hate, yes, no, great, awful]
  */
@@ -250,6 +338,9 @@ export function getDataset(name: DatasetName, seedRefresh = false): Dataset {
     case "tiny_text":
       ds = makeTinyText();
       break;
+    case "noisy_moons":
+      ds = makeNoisyMoons();
+      break;
     default:
       ds = makeXor();
   }
@@ -267,4 +358,5 @@ export const DATASET_NAMES: DatasetName[] = [
   "spiral",
   "tiny_images",
   "tiny_text",
+  "noisy_moons",
 ];

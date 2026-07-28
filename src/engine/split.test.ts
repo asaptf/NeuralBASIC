@@ -42,11 +42,16 @@ describe("splitTrainVal — deterministic + stratified", () => {
     );
   });
 
-  it("uses DEFAULT_VAL_RATIO when ratio omitted", () => {
-    expect(resolveValRatio(undefined)).toBe(DEFAULT_VAL_RATIO);
+  it("leaves the hold-out off unless asked", () => {
+    // Opt-in by design: defaulting it on withheld a quarter of the data from
+    // every chapter that predates it, and moved figures already written into
+    // the lesson prose. DEFAULT_VAL_RATIO remains the suggested value for
+    // callers that want one, not an implicit default.
+    expect(resolveValRatio(undefined)).toBe(0);
     expect(resolveValRatio(0)).toBe(0);
     expect(resolveValRatio(0.3)).toBe(0.3);
     expect(resolveValRatio(1)).toBe(0);
+    expect(DEFAULT_VAL_RATIO).toBeGreaterThan(0);
   });
 
   it("keeps class balance within one sample of the target ratio on moons", () => {
@@ -98,7 +103,7 @@ describe("splitTrainVal — deterministic + stratified", () => {
     expect(split.val).toBeNull();
   });
 
-  it("applies a split to moons, circles, spiral, linear, tiny_*", () => {
+  it("applies a split to moons, circles, spiral, linear, tiny_*, noisy_moons", () => {
     for (const name of [
       "moons",
       "circles",
@@ -106,6 +111,7 @@ describe("splitTrainVal — deterministic + stratified", () => {
       "linear",
       "tiny_images",
       "tiny_text",
+      "noisy_moons",
     ] as const) {
       const ds = getDataset(name);
       if (ds.samples.length < MIN_SAMPLES_FOR_VAL_SPLIT) continue;
@@ -127,10 +133,18 @@ describe("train path — structural hold-out", () => {
     });
     expect(off.splitApplied).toBe(false);
 
+    const omitted = prepareDataSplit({
+      learningRate: 0.2,
+      epochs: 1,
+      dataset: "moons",
+    });
+    expect(omitted.splitApplied).toBe(false);
+
     const on = prepareDataSplit({
       learningRate: 0.2,
       epochs: 1,
       dataset: "moons",
+      valRatio: 0.3,
     });
     expect(on.splitApplied).toBe(true);
   });
@@ -274,192 +288,152 @@ train dataset=moons val=banana
 });
 
 /**
- * The curriculum point: a large net can drive training accuracy up while
- * held-out accuracy stalls or falls.
+ * Chapter 3 needs a dataset where overfitting is reliably observable and
+ * fixable. Clean sets (moons/circles) generalise at any capacity; spiral
+ * underfits both sides. `noisy_moons` flips a fixed fraction of labels so
+ * memorising individual points actively hurts held-out accuracy.
  *
- * Measured findings (default datasets, no curriculum edits):
- * - moons + 32×32 / 48×48: train and val often both hit 100% accuracy (noise
- *   0.08 is mild; a wide net generalises). Tiny loss gap only (~0.001).
- * - spiral + 32×32, val=0.3, 200 epochs: regularly ≥5pp train>val accuracy
- *   (observed ~9–17pp on some seeds). That is the reliable demo case.
+ * Aggregates only — per-run assertions on stochastic training have flaked
+ * twice in this repo already.
+ *
+ * Measured over 40 runs (val=0.3), defaults of `noisy_moons`:
+ *   64×64 l2=0  e500 lr=0.08 → train ~96%  val ~64%  gap ~32pp (min ~21pp)
+ *   64×64 l2=0.005 e300      → train ~82%  val ~75%  (held-out +12pp)
+ *   dense 6 units            → train ~80%  val ~69%  (held-out +5pp)
  */
-describe("overfitting signature (train vs held-out)", () => {
-  it("surfaces a real train–val gap (spiral; moons often generalises)", () => {
-    type Trial = {
-      label: string;
-      trainAcc: number;
-      valAcc: number;
-      trainLoss: number;
-      valLoss: number;
-      midTrainAcc: number;
-      midValAcc: number;
-      lateTrainAcc: number;
-      lateValAcc: number;
+describe("overfitting signature (noisy_moons)", () => {
+  it("is deterministic (same points + labels every call)", () => {
+    const a = getDataset("noisy_moons");
+    const b = getDataset("noisy_moons");
+    expect(a.samples.length).toBe(b.samples.length);
+    expect(a.samples.length).toBeGreaterThanOrEqual(MIN_SAMPLES_FOR_VAL_SPLIT);
+    for (let i = 0; i < a.samples.length; i++) {
+      expect(a.samples[i]!.x).toEqual(b.samples[i]!.x);
+      expect(a.samples[i]!.y).toEqual(b.samples[i]!.y);
+    }
+    // Refresh regenerates identical geometry + flips (no Math.random).
+    const c = getDataset("noisy_moons", true);
+    expect(c.samples.map((s) => [...s.x, ...s.y])).toEqual(
+      a.samples.map((s) => [...s.x, ...s.y])
+    );
+  });
+
+  it("high capacity overfits; L2 / small capacity improve held-out", () => {
+    const RUNS = 20;
+
+    const overfitNet: NetworkConfig = {
+      name: "OverfitDemo",
+      layers: [
+        { type: "dense", units: 64, activation: "relu", inputDim: 2 },
+        { type: "dense", units: 64, activation: "relu" },
+        { type: "dense", units: 1, activation: "sigmoid" },
+      ],
+      l2: 0,
     };
-    const trials: Trial[] = [];
+    const overfitTrain: TrainConfig = {
+      learningRate: 0.08,
+      epochs: 500,
+      dataset: "noisy_moons",
+      shuffle: true,
+      valRatio: 0.3,
+    };
 
-    const configs: {
-      label: string;
-      network: NetworkConfig;
-      train: TrainConfig;
-    }[] = [
-      {
-        label: "32×32 moons val=0.3 epochs=200",
-        network: {
-          name: "OverfitDemo",
-          layers: [
-            { type: "dense", units: 32, activation: "relu", inputDim: 2 },
-            { type: "dense", units: 32, activation: "relu" },
-            { type: "dense", units: 1, activation: "sigmoid" },
-          ],
-          l2: 0,
-        },
-        train: {
-          learningRate: 0.2,
-          epochs: 200,
-          dataset: "moons",
-          shuffle: true,
-          valRatio: 0.3,
-        },
-      },
-      {
-        label: "48×48 moons val=0.35 epochs=250",
-        network: {
-          layers: [
-            { type: "dense", units: 48, activation: "relu", inputDim: 2 },
-            { type: "dense", units: 48, activation: "relu" },
-            { type: "dense", units: 1, activation: "sigmoid" },
-          ],
-          l2: 0,
-        },
-        train: {
-          learningRate: 0.25,
-          epochs: 250,
-          dataset: "moons",
-          shuffle: true,
-          valRatio: 0.35,
-        },
-      },
-      {
-        label: "32×32 spiral val=0.3 epochs=200",
-        network: {
-          layers: [
-            { type: "dense", units: 32, activation: "relu", inputDim: 2 },
-            { type: "dense", units: 32, activation: "relu" },
-            { type: "dense", units: 1, activation: "sigmoid" },
-          ],
-          l2: 0,
-        },
-        train: {
-          learningRate: 0.2,
-          epochs: 200,
-          dataset: "spiral",
-          shuffle: true,
-          valRatio: 0.3,
-        },
-      },
-    ];
+    const l2Net: NetworkConfig = {
+      name: "L2Fix",
+      layers: [
+        { type: "dense", units: 64, activation: "relu", inputDim: 2 },
+        { type: "dense", units: 64, activation: "relu" },
+        { type: "dense", units: 1, activation: "sigmoid" },
+      ],
+      l2: 0.005,
+    };
+    const l2Train: TrainConfig = {
+      learningRate: 0.12,
+      epochs: 300,
+      dataset: "noisy_moons",
+      shuffle: true,
+      valRatio: 0.3,
+    };
 
-    // A few random inits per config — overfitting is seed-sensitive.
-    for (const cfg of configs) {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const { history } = createAndTrain(cfg.network, cfg.train, {
-          includeDecisionBoundary: false,
-        });
-        const acc = history.accuracies;
-        const vAcc = history.valAccuracies ?? [];
-        const losses = history.losses;
-        const vLoss = history.valLosses ?? [];
-        if (vAcc.length === 0) continue;
+    const smallNet: NetworkConfig = {
+      name: "SmallFix",
+      layers: [
+        { type: "dense", units: 6, activation: "relu", inputDim: 2 },
+        { type: "dense", units: 1, activation: "sigmoid" },
+      ],
+      l2: 0,
+    };
+    const smallTrain: TrainConfig = {
+      learningRate: 0.3,
+      epochs: 250,
+      dataset: "noisy_moons",
+      shuffle: true,
+      valRatio: 0.3,
+    };
 
-        const mid = Math.floor(acc.length / 2);
-        const late = acc.length - 1;
-        trials.push({
-          label: `${cfg.label} #${attempt}`,
-          trainAcc: acc[late]!,
-          valAcc: vAcc[late]!,
-          trainLoss: losses[late]!,
-          valLoss: vLoss[late]!,
-          midTrainAcc: acc[mid]!,
-          midValAcc: vAcc[mid]!,
-          lateTrainAcc: acc[late]!,
-          lateValAcc: vAcc[late]!,
-        });
-      }
+    const overfitTrainAccs: number[] = [];
+    const overfitValAccs: number[] = [];
+    const overfitGaps: number[] = [];
+    const l2ValAccs: number[] = [];
+    const smallValAccs: number[] = [];
+
+    for (let r = 0; r < RUNS; r++) {
+      const over = createAndTrain(overfitNet, overfitTrain, {
+        includeDecisionBoundary: false,
+      });
+      const t = over.history.final.accuracy;
+      const v = over.history.final.valAccuracy;
+      expect(v, "overfit run must produce held-out metrics").not.toBeNull();
+      expect(Number.isFinite(v!)).toBe(true);
+      overfitTrainAccs.push(t);
+      overfitValAccs.push(v!);
+      overfitGaps.push(t - v!);
+
+      const reg = createAndTrain(l2Net, l2Train, {
+        includeDecisionBoundary: false,
+      });
+      expect(reg.history.final.valAccuracy).not.toBeNull();
+      l2ValAccs.push(reg.history.final.valAccuracy!);
+
+      const sm = createAndTrain(smallNet, smallTrain, {
+        includeDecisionBoundary: false,
+      });
+      expect(sm.history.final.valAccuracy).not.toBeNull();
+      smallValAccs.push(sm.history.final.valAccuracy!);
     }
 
-    expect(trials.length).toBeGreaterThan(0);
+    const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+    const meanTrain = mean(overfitTrainAccs);
+    const meanVal = mean(overfitValAccs);
+    const meanGap = mean(overfitGaps);
+    const meanL2Val = mean(l2ValAccs);
+    const meanSmallVal = mean(smallValAccs);
 
-    // Primary signature: final train accuracy strictly above held-out.
-    // Secondary: train kept rising (or stayed high) while val stalled/dropped.
-    // Tertiary: val loss above train loss by a meaningful margin.
+    const summary =
+      `overfit train=${(meanTrain * 100).toFixed(1)}% val=${(meanVal * 100).toFixed(1)}% ` +
+      `gap=${(meanGap * 100).toFixed(1)}pp (n=${RUNS}); ` +
+      `L2 val=${(meanL2Val * 100).toFixed(1)}% small val=${(meanSmallVal * 100).toFixed(1)}%`;
 
-    const bestGap = Math.max(...trials.map((t) => t.trainAcc - t.valAcc));
-    const summary = trials
-      .map(
-        (t) =>
-          `${t.label}: trainAcc=${t.trainAcc.toFixed(3)} valAcc=${t.valAcc.toFixed(3)} ` +
-          `Δ=${(t.trainAcc - t.valAcc).toFixed(3)} ` +
-          `trainLoss=${t.trainLoss.toFixed(3)} valLoss=${t.valLoss.toFixed(3)}`
-      )
-      .join("\n");
-
-    // Always assert the engine *surfaces* both curves.
-    for (const t of trials) {
-      expect(t.trainAcc).toBeGreaterThanOrEqual(0);
-      expect(t.valAcc).toBeGreaterThanOrEqual(0);
-    }
-
-    /**
-     * What the built-in datasets actually do, measured over 40 runs each:
-     *
-     *   moons  h=32 val=0.30  train 100.0%  val 100.0%  gap 0.0pp in 40/40
-     *   moons  h=48 val=0.35  train 100.0%  val 100.0%  gap 0.0pp in 40/40
-     *   circles h=32 val=0.30 train 100.0%  val 100.0%  gap 0.0pp in 40/40
-     *   spiral h=32 val=0.30  train  60.7%  val  63.1%  gap -2.4pp (val ABOVE train)
-     *
-     * There is no overfitting to find. These sets are smooth, low-noise and
-     * densely sampled, so a 32x32 net that memorises them also generalises to
-     * held-out points from the same distribution. Asserting a gap here was
-     * flaky at roughly one run in three: it only ever passed by catching noise
-     * on `spiral`, where the gap is negative on average.
-     *
-     * So this test pins the plumbing plus the honest current limitation. When a
-     * dataset with label noise or sparse sampling lands, flip the final
-     * assertion to demand a real gap on that dataset — the curriculum's
-     * Chapter 3 needs it.
-     */
-    const cleanTrials = trials.filter((t) => !/spiral/.test(t.label));
-    const cleanGaps = cleanTrials.map((t) => t.trainAcc - t.valAcc);
-    const meanCleanGap =
-      cleanGaps.reduce((a, b) => a + b, 0) / (cleanGaps.length || 1);
-
-    /*
-     * Assert the aggregate, not each run. With valRatio=0.35 on 80 moons points
-     * the held-out set is 28 samples, so a single misclassified point moves the
-     * gap 3.6pp and two move it past any 5pp line. A per-trial assertion here
-     * flaked about one run in eight even though the mean gap is ~0. Aggregates
-     * are the only stable way to assert a stochastic quantity; the 15pp ceiling
-     * still sits far below anything real overfitting would produce.
-     */
+    // 1. High capacity: near-perfect train, clearly worse held-out.
     expect(
-      meanCleanGap,
-      `mean train-vs-held-out gap on clean datasets should be ~0.\n${summary}`
-    ).toBeLessThan(0.05);
+      meanTrain,
+      `high-capacity mean train should be near-perfect.\n${summary}`
+    ).toBeGreaterThan(0.9);
+    expect(
+      meanGap,
+      `mean train−val gap must be unmistakable (≫ sampling noise).\n${summary}`
+    ).toBeGreaterThan(0.15);
+    expect(
+      meanVal,
+      `held-out must lag train — not a joint underfit.\n${summary}`
+    ).toBeLessThan(meanTrain - 0.12);
 
-    for (const t of cleanTrials) {
-      expect(
-        t.trainAcc - t.valAcc,
-        `${t.label}: gap far beyond sampling noise — a dataset likely gained noise, and Chapter 3 should switch to it.\n${summary}`
-      ).toBeLessThan(0.15);
-    }
-
-    // The split itself must be real: held-out metrics exist and are finite.
-    for (const t of trials) {
-      expect(Number.isFinite(t.valAcc)).toBe(true);
-      expect(Number.isFinite(t.valLoss)).toBe(true);
-    }
-
-    expect(bestGap).toBeLessThan(0.5);
-  }, 120_000);
+    // 2. Fix direction: L2 and/or reduced capacity improve held-out accuracy.
+    // Either fix is enough for the chapter; both should help on this set.
+    const bestFixVal = Math.max(meanL2Val, meanSmallVal);
+    expect(
+      bestFixVal,
+      `L2 or small net must improve held-out vs unregularised high-cap.\n${summary}`
+    ).toBeGreaterThan(meanVal + 0.03);
+  }, 180_000);
 });

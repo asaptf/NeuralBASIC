@@ -214,35 +214,36 @@ train dataset=circles lr=0.25 epochs=250
     // Ch3 — capacity / L2
     case "ch3-c1":
       return {
-        label: "wide multi-layer net on moons",
-        dsl: starter.replace(/dataset=\w+/, "dataset=moons"),
+        label: "wide multi-layer net on noisy_moons",
+        dsl: starter,
         attempts: 1,
         epochsCap: 40,
       };
     case "ch3-c2":
       return {
-        label: "wide net with positive L2 on moons",
+        label: "wide net with positive L2 on noisy_moons",
         dsl: `network OverfitDemo {
   dense 2 -> 32 activation=relu
   dense 32 -> 32 activation=relu
   dense 32 -> 1 activation=sigmoid
 }
-l2=0.01
-train dataset=moons lr=0.2 epochs=80
+l2=0.005
+train dataset=noisy_moons lr=0.12 epochs=300 val=0.3
 `,
         attempts: 1,
         epochsCap: 80,
       };
     case "ch3-c3":
       return {
-        label: "wide MLP reaching 0.9 on moons",
-        // Chapter 3 starter is already a wide net; train long enough to clear 0.9
+        label: "wide MLP reaching 0.9 on noisy_moons",
+        // The chapter's own overfit demo: it memorises noisy_moons past 0.9 train.
         dsl: `network OverfitDemo {
-  dense 2 -> 32 activation=relu
-  dense 32 -> 32 activation=relu
-  dense 32 -> 1 activation=sigmoid
+  dense 2 -> 64 activation=relu
+  dense 64 -> 64 activation=relu
+  dense 64 -> 1 activation=sigmoid
 }
-train dataset=moons lr=0.2 epochs=300
+l2=0.0
+train dataset=noisy_moons lr=0.08 epochs=400 val=0.3
 `,
         attempts: 5,
         epochsCap: 300,

@@ -170,7 +170,7 @@ function hintForChapter(ctx: TutorContext): string {
     case "ch2":
       return `Hint: XOR needs a nonlinear hidden layer. Try one hidden dense with relu, then a sigmoid output. What accuracy do you predict before training?`;
     case "ch3":
-      return `Hint: set a wide network with l2=0, train on moons, sketch the boundary. Then set l2>0. Which boundary looks simpler?`;
+      return `Hint: train the wide net on \`noisy_moons\` with l2=0 and compare the two accuracy cards — training against held-out. Then set l2=0.005 and look again. Which number got better, and which got worse?`;
     case "ch4":
       return `Hint: keep the image path — conv2d → flatten → dense. If accuracy is low, try more epochs or a slightly higher lr (still small). What should a "vertical bar" filter respond to?`;
     case "ch5":

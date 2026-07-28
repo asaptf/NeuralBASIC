@@ -151,7 +151,12 @@ export function splitTrainVal(
  * `undefined` → default; explicit `0` → no split.
  */
 export function resolveValRatio(valRatio: number | undefined): number {
-  if (valRatio === undefined) return DEFAULT_VAL_RATIO;
+  // Opt-in, deliberately. A hold-out is a teaching tool introduced in Chapter 3;
+  // defaulting it on silently withheld a quarter of the data from every earlier
+  // lesson, which are built on the model seeing all four XOR corners and all 80
+  // moons points. It also moved figures already measured and written into prose
+  // (moons at lr=0.8 reported 0.30 loss on the full set, 0.175 on 75% of it).
+  if (valRatio === undefined) return 0;
   if (!Number.isFinite(valRatio) || valRatio <= 0) return 0;
   if (valRatio >= 1) return 0;
   return valRatio;

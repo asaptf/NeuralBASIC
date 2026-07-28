@@ -399,7 +399,7 @@ This gap between "a solution exists in there" and "training reliably reaches it"
 }
 train dataset=xor lr=0.35 epochs=500`,
           expect:
-            "Solves XOR in about 98 runs out of 100, landing from 75% to 100% across attempts, and the Data Lab finally shows a bent boundary with no points ringed. Edit 16 down to 2 and train repeatedly \u2014 it will mostly fail, which is the point.",
+            "Solves XOR in about 98 runs out of 100, landing from 50% to 100% across attempts, and the Data Lab finally shows a bent boundary with no points ringed. Edit 16 down to 2 and train repeatedly \u2014 it will mostly fail, which is the point.",
         },
       },
       {
@@ -427,7 +427,7 @@ Use ReLU by default in deep networks because the reason for it holds there. Don'
 }
 train dataset=xor lr=0.35 epochs=500`,
           expect:
-            "Solves it in about 99 runs out of 100, landing from 75% to 100% across attempts \u2014 so train it more than once before judging. Swap the hidden activation to relu and repeat: it fails noticeably more often.",
+            "Solves it in about 99 runs out of 100, landing from 50% to 100% across attempts \u2014 so train it more than once before judging. Swap the hidden activation to relu and repeat: it fails noticeably more often.",
         },
       },
       {
@@ -641,13 +641,114 @@ A network with enough capacity can carve a region around *every single training 
       "Apply L2 regularization",
       "Read loss curves as a diagnostic",
     ],
-    theory: `**Overfitting:** train loss ↓ but the model fails to generalize.
-High capacity (wide layers) + small data → memorize.
+    theory: `**Overfitting:** the training score improves while the model gets *worse* at data it hasn't seen.
+
+This chapter uses \`noisy_moons\`, where some labels are deliberately flipped, and \`val=0.3\` to hold data back. Watch the two accuracy cards diverge.
 
 **L2 regularization** adds λ‖w‖² to the loss, preferring smaller weights.
 
-In NeuralBASIC set \`l2=0.01\` (or similar) above the train line.
-Compare decision boundaries with and without L2 on moons.`,
+**L2** adds λ‖w‖² to the loss, preferring smaller weights and smoother boundaries.
+
+Set \`l2=0.005\` above the train line and compare **held-out** accuracy — not the loss, which the penalty inflates by construction.`,
+    lesson: [
+      {
+        heading: "A score of 94% that means nothing",
+        body: `Train the chapter's starter network — three layers, 64 units wide — on \`noisy_moons\` and it reaches about **94% training accuracy**. Averaged over forty runs it lands between 84% and 100%.
+
+If that were the whole story you'd ship it.
+
+It isn't, and the reason is the number next to it. This chapter's dataset is \`noisy_moons\`: the same two crescents as before, except a substantial fraction of the labels have been **deliberately flipped**. Some points genuinely sit in the wrong crescent. No function can get those right and still describe the underlying shape — so a model scoring 94% on this data is not a model that understands crescents. It's a model that has memorised which specific points were mislabelled.`,
+      },
+      {
+        heading: "The held-out split, and the only number that matters",
+        body: `The \`val=0.3\` on the train line holds back 30% of the data. The network never trains on it; it is only ever scored on it. That gives you two accuracy cards instead of one:
+
+- **Accuracy · train** — how well it does on data it has already seen
+- **Accuracy · held-out** — how well it does on data it hasn't
+
+For the starter network, measured over forty runs: training **94.3%**, held-out **63.3%**. A gap of **31 percentage points**, and the smallest gap in forty runs was still 13pp. This is not occasional bad luck — it happens every time.
+
+The metrics panel fills in the band between the two accuracy curves for exactly this reason. That shaded area *is* the overfitting. Watch it open up as training proceeds.`,
+        example: {
+          label: "Watch it memorise the noise",
+          dsl: `network OverfitDemo {
+  dense 2 -> 64 activation=relu
+  dense 64 -> 64 activation=relu
+  dense 64 -> 1 activation=sigmoid
+}
+l2=0.0
+train dataset=noisy_moons lr=0.08 epochs=400 val=0.3`,
+          expect:
+            "Training accuracy climbs to somewhere from 65% to 100% while held-out accuracy stalls at 63%, and the band between the two curves opens wide. The training number keeps improving long after the useful learning has stopped.",
+        },
+      },
+      {
+        heading: "Why capacity is what lets this happen",
+        body: `A model can only memorise individual points if it has enough freedom to bend around them. Sixty-four units across two hidden layers is thousands of weights for eighty points — more than enough to carve a private pocket around every mislabelled one.
+
+So the first and bluntest fix is to take that freedom away. Six hidden units cannot make thousands of independent bends; the best it can do is approximate the general shape.
+
+Measured over forty runs, six hidden units gives training **79.1%** and held-out **68.8%**. Read that carefully: training accuracy fell by fifteen points, and held-out accuracy *rose* by five. You made the visible number worse on purpose and got a better model.
+
+That trade is the whole subject. If you only ever look at training accuracy you will reject every fix that works.`,
+        example: {
+          label: "Shrink the network instead",
+          dsl: `network SmallNet {
+  dense 2 -> 6 activation=relu
+  dense 6 -> 1 activation=sigmoid
+}
+train dataset=noisy_moons lr=0.3 epochs=250 val=0.3`,
+          expect:
+            "Training accuracy drops to somewhere from 50% to 95% — clearly worse than the wide net — while held-out accuracy rises to 69%. The gap between the two cards shrinks from around 31pp to roughly 10pp.",
+        },
+      },
+      {
+        heading: "L2: keeping the capacity, spending it more carefully",
+        body: `Throwing away capacity is crude. Often you want a large model — you just don't want it using its size to memorise. **L2 regularisation** adds a penalty proportional to the sum of the squared weights:
+
+loss = cross-entropy + λ · Σw²
+
+Large weights are what let a network turn sharply. Penalising them biases training toward smoother functions, which can follow a broad trend but can't spike around one stray point. Note the shape of the incentive: λ doesn't forbid a large weight, it makes one *expensive*, so the model will only pay if the data really justifies it.
+
+Same 64×64 network, \`l2=0.005\`: training **81.0%**, held-out **74.8%**. Held-out accuracy went from 63.3% to 74.8% — **eleven and a half points better** than the unregularised model, and better than shrinking the network achieved. The gap fell from 31pp to 6pp.
+
+Keeping the capacity and constraining how it's used beat removing the capacity. That is usually, though not always, the way it goes.`,
+        example: {
+          label: "Regularise instead of shrinking",
+          dsl: `network Regularised {
+  dense 2 -> 64 activation=relu
+  dense 64 -> 64 activation=relu
+  dense 64 -> 1 activation=sigmoid
+}
+l2=0.005
+train dataset=noisy_moons lr=0.12 epochs=300 val=0.3`,
+          expect:
+            "Training accuracy lands from 50% to 95%, held-out accuracy rises to 75% — the best held-out score of the three examples — and the accuracy band nearly closes. Compare the held-out card against the unregularised run: that difference is the entire point of the technique.",
+        },
+      },
+      {
+        heading: "A trap in the loss number itself",
+        body: `Here is something that will confuse you if nobody warns you: **turning on L2 makes the displayed loss go up.**
+
+That's not the model getting worse. Look again at the formula — the penalty term λ·Σw² is *part of the loss being reported*. Switch on L2 and you have added a quantity to the number on screen, by construction. The unregularised run shows a loss near zero partly because it has no penalty to pay and partly because it has memorised the answers.
+
+So during regularisation work the loss cards are close to useless for comparing configurations. **Compare held-out accuracy instead.** It's the only figure here that means the same thing across different values of λ.`,
+      },
+      {
+        heading: "Common traps",
+        body: `- **"Training accuracy went up, so it's learning."** On noisy data past a certain point, rising training accuracy is the model absorbing noise. The held-out card is what tells you which is happening.
+- **"More regularisation is safer."** Push λ far enough and the model gives up entirely — held-out accuracy collapses back toward chance because you have forbidden it from fitting anything at all. There is a middle, and you find it by measuring.
+- **"The best run is the result."** Held-out accuracy on this dataset varies a lot between runs: the regularised setup ranges from about 62% to 85% depending on the random start. Comparing single runs of two configurations tells you almost nothing. Run each a few times.
+- **"L2 raised my loss, so I'll revert it."** The penalty is inside the reported loss. Judge by held-out accuracy.
+- **Tuning against the held-out set.** Once you've picked λ by watching held-out accuracy, that set has quietly become part of your training process. Real practice needs a third, untouched set for the final honest number — a distinction worth knowing exists even though this app has only two.`,
+      },
+      {
+        heading: "Where this goes next",
+        body: `You now have the discipline that separates working practice from tinkering: hold data back, judge on the part the model hasn't seen, and be willing to accept a worse visible score for a better real one.
+
+Everything so far has treated inputs as a flat list of numbers — two coordinates, order irrelevant. Chapter 4 introduces data where **position matters**: a small image, where a pattern means the same thing wherever it appears. Fully connected layers handle that badly, and the fix is to stop giving every input its own private weight.`,
+      },
+    ],
     starterDSL: defaultStarterDSL("ch3"),
     challenges: [
       {
@@ -671,7 +772,7 @@ Compare decision boundaries with and without L2 on moons.`,
             prompt:
               "Train a multi-layer net on moons (any accuracy). Include dense layers.",
             experimentCheck: {
-              dataset: "moons",
+              dataset: "noisy_moons",
               dslIncludes: ["dense"],
             },
           },
@@ -731,7 +832,7 @@ Compare decision boundaries with and without L2 on moons.`,
             kind: "experiment",
             prompt: "Set l2 to a positive value (e.g. 0.01) and train on moons.",
             experimentCheck: {
-              dataset: "moons",
+              dataset: "noisy_moons",
               dslIncludes: ["l2"],
             },
           },
@@ -789,7 +890,7 @@ Compare decision boundaries with and without L2 on moons.`,
             prompt: "Reach accuracy ≥ 0.9 on moons with any regularized or MLP setup.",
             experimentCheck: {
               minAccuracy: 0.9,
-              dataset: "moons",
+              dataset: "noisy_moons",
             },
           },
           {
