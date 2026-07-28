@@ -108,7 +108,7 @@ export function mockTutorReply(
     return (
       `A kernel is a tiny shared detector sliding over the image. ` +
       `If your vertical-bar detector is correct, where should its activation light up? ` +
-      `Train on tiny_images and watch the visualizer — then explain one filter's job.`
+      `Train on tiny_images to see a kernel form, then on shifted_bars — where the same motif moves — and explain one filter's job.`
     );
   }
 
@@ -168,13 +168,19 @@ function hintForChapter(ctx: TutorContext): string {
     case "ch1":
       return `Hint (not a solution): a single neuron draws one line. Which datasets are linearly separable — AND, OR, or XOR? Predict, then switch \`dataset=\` and train.`;
     case "ch2":
-      return `Hint: XOR needs a nonlinear hidden layer. Try one hidden dense with relu, then a sigmoid output. What accuracy do you predict before training?`;
+      // Deliberately doesn't name an activation: measured over 60 runs, sigmoid
+      // reaches 97% on XOR, tanh 93% and relu 78%, so naming relu here would
+      // steer the reader to the weakest one and read as the recommended answer.
+      return `Hint: XOR needs a nonlinear hidden layer — one hidden dense, then a sigmoid output. Which hidden activation do you predict wins, and by how much? Try more than one.`;
     case "ch3":
       return `Hint: train the wide net on \`noisy_moons\` with l2=0 and compare the two accuracy cards — training against held-out. Then set l2=0.005 and look again. Which number got better, and which got worse?`;
     case "ch4":
       return `Hint: the path that works is conv2d → \`pool global=true\` → dense. Try replacing the pool with \`flatten\` and compare held-out accuracy — then explain what the pooling was doing for you.`;
     case "ch5":
-      return `Hint: use \`transformer d_model=8 heads=2\` then a dense output on tiny_text. After training, read the attention heatmap before asking for architecture changes.`;
+      // d_model must divide the input on token boundaries — see defaultStarterDSL.
+      // The old hint said d_model=8 on tiny_text, which yields a 1×1 attention
+      // map: it sent the reader to the dead end this chapter was rebuilt to avoid.
+      return `Hint: use \`attention d_model=4 heads=2\` then a dense output on \`negation\`. After training, read the attention heatmap — which token does PAD look at? — before asking for architecture changes.`;
     default:
       return `Hint: change one variable only, train, observe metrics + visualizer, then explain.`;
   }
