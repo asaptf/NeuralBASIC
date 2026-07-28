@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# One-off scaffolding scripts left over from project generation. Unreferenced by
+# package.json, and they hardcode an absolute path into a local temp directory,
+# so they are kept locally but not published.
+/scripts/
+
