@@ -212,6 +212,19 @@ completes the whole curriculum.
 CDN. With it blocked, the editor does not appear while everything else keeps working. See
 [SECURITY.md](SECURITY.md) for how to self-host Monaco if that matters to you.
 
+**Installable, and offline after one visit.** The app ships a manifest and a service worker, so it can
+be installed to a home screen or desktop. Offline needs **one prior online visit** — the worker
+precaches the shell and the build's hashed assets when it installs, and cannot do that before it
+exists. After that a cold offline start works properly: verified with the server stopped, the app
+renders styled and trains 200 epochs. Monaco is the exception, being the one asset not served from this
+origin.
+
+HTML is fetched network-first, so a deploy appears on the next online load rather than after some cache
+expiry. That direction is deliberate: the lessons quote figures measured against the running engine, and
+serving a stale bundle behind fresh prose is the one failure this project cannot ship. The worker
+registers in production builds only, so `npm run dev` never installs it — test that behaviour against
+`npm run build` and `npm run preview`.
+
 **The engine is built for transparency, not speed.** Per-sample SGD in plain TypeScript on the CPU, so
 every weight and activation is a plain array you can render each tick. Dense, conv and pool layers use
 analytical backprop; attention falls back to finite differences, which is why Chapter 5's examples use
