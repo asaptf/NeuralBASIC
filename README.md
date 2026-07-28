@@ -2,7 +2,20 @@
 
 **An interactive educational IDE for learning neural networks and modern AI** — the spiritual successor to classic QuickBASIC and [TabletBasic](https://github.com/asaptf/TabletBasic).
 
+[![CI](https://github.com/asaptf/NeuralBASIC/actions/workflows/ci.yml/badge.svg)](https://github.com/asaptf/NeuralBASIC/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-288-brightgreen.svg)](#every-number-in-the-lessons-is-tested)
+
+**[→ Try it in your browser](https://asaptf.github.io/NeuralBASIC/)** — no install, no account, nothing
+leaves your machine.
+
 Users should feel the same joy of immediate experimentation that people felt with BASIC in the 1980s–90s, applied to neural networks. The app forces **active construction**, **productive struggle**, and **deep intuition**. It is **not** a passive video course and **not** a ChatGPT wrapper that writes code for you.
+
+![NeuralBASIC running Chapter 1: a single neuron on XOR, stuck at 50% accuracy with two of four points ringed as misclassified](docs/screenshot-chapter1.png)
+
+*Chapter 1, after 200 epochs. One neuron on XOR sits at chance — the accuracy curve hugs the chance
+line, two of four points are ringed, and the boundary has slid out of frame because the neuron gave up
+and predicts one class everywhere. That failure is the lesson, and it is reproducible.*
 
 ---
 
@@ -34,10 +47,22 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000).
 
 ```bash
-npm test          # engine, tutor graders, persistence, curriculum completeness
-npm run build     # production build
+npm test          # engine, tutor graders, persistence, curriculum, lesson figures
 npm run typecheck
+npm run lint
+npm run build     # static export into out/
+npm run preview   # serve the exported bundle
 ```
+
+`npm run build` produces a fully static site in `out/` — there is no server to run, which is why
+there is no `npm start`. To preview it the way GitHub Pages serves it (under a repo subpath), nest
+`out/` inside a directory named after the repo and set `BASE_PATH` at build time:
+
+```bash
+BASE_PATH=/NeuralBASIC npm run build
+```
+
+Leave `BASE_PATH` unset for local work so the app stays rooted at `/`.
 
 **Definition of Done path (Chapter 1):**
 
@@ -51,7 +76,7 @@ npm run typecheck
 
 ---
 
-## Tech stack (MVP)
+## Tech stack
 
 | Area | Choice |
 |------|--------|
@@ -60,10 +85,10 @@ npm run typecheck
 | Editor | Monaco |
 | Neural runtime | **Pure TypeScript educational engine** (`src/engine`) — fully client-side train/infer, CPU path, no WebGPU required |
 | Persistence | `localStorage` + JSON import/export |
-| Tutor | Deterministic Socratic mock + hard system prompt (optional LLM later) |
+| Tutor | Deterministic offline graders + a pattern-matching Socratic mock — no LLM, no network (see [Limitations](#limitations-stated-plainly)) |
 | Tests | Vitest |
 
-### Why a pure TS engine (not TF.js in MVP)?
+### Why a pure TS engine, not TF.js?
 
 Transparency for teaching: every weight, activation, and attention map is a plain array you can visualize each tick. Unit tests run in Node without WebGPU. The architecture keeps a clear model graph so a TensorFlow.js / WebGPU backend can be swapped behind the same `createAndTrain` / `predict` surface later.
 
@@ -168,6 +193,37 @@ those tests, so progression can't drift from what the tests assert.
 
 ---
 
+## Limitations, stated plainly
+
+Worth knowing before you file an issue — these are deliberate, or at least known.
+
+**The tutor chat is a pattern matcher, not a language model.** The "Ask a question" field routes your
+text through about a dozen regular expressions covering the questions we anticipated — XOR, learning
+rate, overfitting, convolution, attention, your current metrics, and "just give me the code" (which it
+refuses). On those it answers well and instantly. On anything else it falls through to a generic
+Socratic nudge and does not engage with what you actually asked. It also only speaks English.
+
+This does not affect progress. Chapter unlocking is decided by the offline graders in
+`src/tutor/explain.ts`, which check an explanation against *distinct concepts* so keyword stuffing
+fails — that part is deterministic, tested, and needs no network. A learner who never touches the chat
+completes the whole curriculum.
+
+**The DSL editor needs network access on first load.** `@monaco-editor/react` fetches Monaco from a
+CDN. With it blocked, the editor does not appear while everything else keeps working. See
+[SECURITY.md](SECURITY.md) for how to self-host Monaco if that matters to you.
+
+**The engine is built for transparency, not speed.** Per-sample SGD in plain TypeScript on the CPU, so
+every weight and activation is a plain array you can render each tick. Dense, conv and pool layers use
+analytical backprop; attention falls back to finite differences, which is why Chapter 5's examples use
+small epoch counts. Do not benchmark this against a real framework — it is a microscope, not an engine.
+
+**Training is stochastic and figures move.** Weight initialisation and sample order are random, so the
+same program gives different numbers run to run. Datasets are frozen deterministically so at least the
+*data* is identical everywhere. Lesson claims are therefore ranges measured over many runs, not
+promises about your next run.
+
+---
+
 ## Themes
 
 - **Modern Dark** — glowing neurons, cyber aesthetic (`data-theme="modern"`).
@@ -180,6 +236,39 @@ those tests, so progression can't drift from what the tests assert.
 - **Save / Load** — browser `localStorage`.
 - **Export JSON** — full experiment (DSL + config + weights + history).
 - **Export Model** — `neuralbasic-model-v1` JSON + a simple **PyTorch-equivalent** training sketch.
+
+---
+
+## Deploying
+
+The app is a static bundle, so it hosts anywhere that serves files. It ships to GitHub Pages from
+`main` via `.github/workflows/pages.yml`.
+
+To set this up on a fresh fork:
+
+1. **Settings → Pages → Source: GitHub Actions.** Not "Deploy from a branch" — the workflow uploads the
+   artifact itself.
+2. If your repo is not named `NeuralBASIC`, change `BASE_PATH` in `.github/workflows/pages.yml` to
+   `/<your-repo>`, and `homepage` in `package.json`. A project site is served from that subpath, and a
+   wrong `BASE_PATH` gives a page that loads with no CSS or JS.
+3. Push to `main`, or run the workflow manually from the Actions tab.
+
+`public/.nojekyll` is committed because Pages otherwise runs Jekyll, which strips the `_next/`
+directory and serves an unstyled, scriptless page.
+
+`.github/workflows/ci.yml` runs the tests, typecheck, lint and build on every pull request.
+
+---
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md), which is mostly about the one rule
+that surprises people: **every number in the lessons is tested**, so editing a figure in the prose
+fails the suite. It also covers the pedagogical rules a change has to respect, and why a moving lesson
+figure is often a sign that the teaching changed rather than just the code.
+
+Please also read the [Code of Conduct](CODE_OF_CONDUCT.md). For security reports, see
+[SECURITY.md](SECURITY.md) — not a public issue.
 
 ---
 
