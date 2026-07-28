@@ -1104,3 +1104,95 @@ html[data-theme="retro"] .panel-header {
   margin-top: var(--s-3);
   text-align: center;
 }
+
+/* ─── Motion ───
+   Every animation here marks a state change the reader should notice: a panel
+   becoming empty, a step being accepted, a chapter opening up. Nothing loops,
+   nothing moves without a cause, and all of it stops under reduced-motion. */
+
+.panel-state {
+  animation: state-in 200ms ease-out both;
+}
+
+@keyframes state-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.panel-state-plate {
+  animation: plate-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes plate-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Presses should feel like presses. */
+.btn:active:not(:disabled),
+.theme-toggle button:active {
+  transform: translateY(1px);
+}
+
+.btn {
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease,
+    transform 60ms ease;
+}
+
+/* A step being accepted is the smallest unit of progress in the app; it should
+   register without stealing attention. */
+.step-badge.done {
+  animation: badge-pop 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes badge-pop {
+  from { opacity: 0; transform: scale(0.6); }
+  60% { transform: scale(1.12); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Finishing a challenge is the payoff for predict → experiment → explain, and
+   it used to happen in total silence. One sweep, then done. */
+.challenge-item.just-completed {
+  animation: challenge-win 900ms ease-out both;
+}
+
+@keyframes challenge-win {
+  0% { background: color-mix(in srgb, var(--good) 34%, transparent); }
+  100% { background: transparent; }
+}
+
+/* A newly unlocked chapter is a reward the eye should find without hunting. */
+.chapter-tab.just-unlocked {
+  animation: unlock-pulse 1.4s ease-out 2 both;
+}
+
+@keyframes unlock-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  70% { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.metric-value {
+  transition: color 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-state,
+  .panel-state-plate,
+  .step-badge.done,
+  .challenge-item.just-completed,
+  .chapter-tab.just-unlocked {
+    animation: none;
+  }
+  .btn {
+    transition: none;
+  }
+  .btn:active:not(:disabled),
+  .theme-toggle button:active {
+    transform: none;
+  }
+}

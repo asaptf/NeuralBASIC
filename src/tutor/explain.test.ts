@@ -98,7 +98,7 @@ const PLAUSIBLE_ANSWERS: Record<string, string> = {
   "ch1-c1":
     "AND is linearly separable with a straight line, but XOR is not — one neuron can't split XOR.",
   "ch1-c2":
-    "With a very high learning rate the loss jumped around and training looked unstable and oscillatory.",
+    "A very high learning rate saturates the sigmoid so the neuron becomes overconfident, and cross-entropy penalises those confident mistakes heavily, while accuracy only counts which side of the threshold each point falls on.",
   "ch1-c3":
     "XOR is not linearly separable, so a single neuron gets stuck and accuracy plateaus below perfect.",
   "ch2-c1":

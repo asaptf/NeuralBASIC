@@ -152,11 +152,11 @@ train dataset=and lr=0.8 epochs=250
       };
     case "ch1-c2":
       return {
-        label: "single dense on OR",
+        label: "single dense on moons",
         dsl: `network Perceptron {
   dense 2 -> 1 activation=sigmoid
 }
-train dataset=or lr=0.8 epochs=250
+train dataset=moons lr=0.8 epochs=250
 `,
         attempts: 3,
         epochsCap: 250,
@@ -326,7 +326,7 @@ const PLAUSIBLE_EXPLAIN: Record<string, string> = {
   "ch1-c1":
     "AND is linearly separable so a single straight boundary works, but XOR classes cannot be separated by one line.",
   "ch1-c2":
-    "With a very large learning rate the updates jumped wildly, the loss oscillated, and training looked unstable.",
+    "A very large learning rate saturates the sigmoid into overconfidence, and cross-entropy charges heavily for those confident mistakes, while accuracy only counts which side of the threshold a point lands on.",
   "ch1-c3":
     "XOR is not linearly separable, so one neuron is stuck near chance and accuracy plateaus well below perfect.",
   "ch2-c1":

@@ -28,7 +28,7 @@ const PLAUSIBLE_EXPLAIN: Record<string, string> = {
   "ch1-c1":
     "AND is linearly separable so a single straight boundary works, but XOR classes cannot be separated by one line.",
   "ch1-c2":
-    "With a very large learning rate the updates jumped wildly, the loss oscillated, and training looked unstable.",
+    "A very large learning rate saturates the sigmoid into overconfidence, and cross-entropy charges heavily for those confident mistakes, while accuracy only counts which side of the threshold a point lands on.",
   "ch1-c3":
     "XOR is not linearly separable, so one neuron is stuck near chance and accuracy plateaus well below perfect.",
 };
@@ -611,14 +611,17 @@ describe("useAppStore — curriculum progression", () => {
 
   it("17. completing every chapter challenge unlocks next; loadChapter refuses locked", () => {
     const ch1Ids = ["ch1-c1", "ch1-c2", "ch1-c3"] as const;
-    const datasets: Record<(typeof ch1Ids)[number], "and" | "or" | "xor"> = {
+    const datasets: Record<
+      (typeof ch1Ids)[number],
+      "and" | "or" | "xor" | "moons"
+    > = {
       "ch1-c1": "and",
-      "ch1-c2": "or",
+      "ch1-c2": "moons",
       "ch1-c3": "xor",
     };
     const correctPredict: Record<(typeof ch1Ids)[number], number> = {
       "ch1-c1": 0,
-      "ch1-c2": 1,
+      "ch1-c2": 0,
       "ch1-c3": 1,
     };
 

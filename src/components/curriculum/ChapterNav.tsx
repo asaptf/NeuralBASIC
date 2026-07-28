@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Markdown } from "@/components/markdown/Markdown";
 import { CHAPTERS, isChapterUnlocked } from "@/curriculum/chapters";
-import type { ChallengeStep } from "@/curriculum/types";
+import type { Chapter, ChallengeStep } from "@/curriculum/types";
+import { useJustBecameTrue } from "@/components/ui/useJustBecameTrue";
 import { useAppStore, type ChallengeFeedback } from "@/store/useAppStore";
 
 export function ChapterNav() {
@@ -28,29 +29,16 @@ export function ChapterNav() {
         </span>
       </div>
       <div className="flex gap-1 overflow-x-auto border-b border-[var(--border)] p-2">
-        {CHAPTERS.map((ch) => {
-          const unlocked = isChapterUnlocked(ch.id, progress.completedChapters);
-          const active = progress.currentChapterId === ch.id;
-          const done = progress.completedChapters.includes(ch.id);
-          return (
-            <button
-              key={ch.id}
-              type="button"
-              disabled={!unlocked}
-              data-testid={`chapter-tab-${ch.id}`}
-              className={`chapter-tab ${active ? "active" : ""} ${done ? "done" : ""}`}
-              onClick={() => loadChapter(ch.id)}
-              title={
-                unlocked
-                  ? `Ch ${ch.number}: ${ch.title}`
-                  : "Complete the previous chapter's challenges first"
-              }
-              aria-label={`Chapter ${ch.number}: ${ch.title}${unlocked ? "" : " (locked)"}`}
-            >
-              {done ? "✓" : ch.number}
-            </button>
-          );
-        })}
+        {CHAPTERS.map((ch) => (
+          <ChapterTab
+            key={ch.id}
+            chapter={ch}
+            unlocked={isChapterUnlocked(ch.id, progress.completedChapters)}
+            active={progress.currentChapterId === ch.id}
+            done={progress.completedChapters.includes(ch.id)}
+            onSelect={() => loadChapter(ch.id)}
+          />
+        ))}
       </div>
       {chapter && (
         <div className="min-h-0 flex-1 overflow-auto p-3">
@@ -80,21 +68,14 @@ export function ChapterNav() {
               const active = activeChallengeId === c.id;
               return (
                 <li key={c.id}>
-                  <button
-                    type="button"
-                    className={`challenge-item w-full text-left ${active ? "active" : ""} ${
-                      cp?.completed ? "completed" : ""
-                    }`}
-                    data-testid={`challenge-${c.id}`}
-                    aria-expanded={active}
-                    onClick={() => setActiveChallenge(active ? null : c.id)}
-                  >
-                    <div className="text-sm font-medium">
-                      {cp?.completed ? "✓ " : ""}
-                      {c.title}
-                    </div>
-                    <div className="text-[11px] opacity-70">{c.description}</div>
-                  </button>
+                  <ChallengeButton
+                    completed={!!cp?.completed}
+                    active={active}
+                    challengeId={c.id}
+                    title={c.title}
+                    description={c.description}
+                    onToggle={() => setActiveChallenge(active ? null : c.id)}
+                  />
                   {active && (
                     <ChallengeBody
                       challengeId={c.id}
@@ -113,6 +94,78 @@ export function ChapterNav() {
         </div>
       )}
     </div>
+  );
+}
+
+function ChallengeButton({
+  completed,
+  active,
+  challengeId,
+  title,
+  description,
+  onToggle,
+}: {
+  completed: boolean;
+  active: boolean;
+  challengeId: string;
+  title: string;
+  description: string;
+  onToggle: () => void;
+}) {
+  const justCompleted = useJustBecameTrue(completed, 900);
+  return (
+    <button
+      type="button"
+      className={`challenge-item w-full text-left ${active ? "active" : ""} ${
+        completed ? "completed" : ""
+      } ${justCompleted ? "just-completed" : ""}`}
+      data-testid={`challenge-${challengeId}`}
+      aria-expanded={active}
+      onClick={onToggle}
+    >
+      <div className="text-sm font-medium">
+        {completed ? "✓ " : ""}
+        {title}
+      </div>
+      <div className="text-[11px] opacity-70">{description}</div>
+    </button>
+  );
+}
+
+function ChapterTab({
+  chapter,
+  unlocked,
+  active,
+  done,
+  onSelect,
+}: {
+  chapter: Chapter;
+  unlocked: boolean;
+  active: boolean;
+  done: boolean;
+  onSelect: () => void;
+}) {
+  const justUnlocked = useJustBecameTrue(unlocked, 3000);
+  return (
+    <button
+      type="button"
+      disabled={!unlocked}
+      data-testid={`chapter-tab-${chapter.id}`}
+      className={`chapter-tab ${active ? "active" : ""} ${done ? "done" : ""} ${
+        justUnlocked ? "just-unlocked" : ""
+      }`}
+      onClick={onSelect}
+      title={
+        unlocked
+          ? `Ch ${chapter.number}: ${chapter.title}`
+          : "Complete the previous chapter's challenges first"
+      }
+      aria-label={`Chapter ${chapter.number}: ${chapter.title}${
+        unlocked ? "" : " (locked)"
+      }`}
+    >
+      {done ? "✓" : chapter.number}
+    </button>
   );
 }
 
