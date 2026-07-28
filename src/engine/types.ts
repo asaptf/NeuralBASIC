@@ -92,7 +92,12 @@ export type DatasetName =
    * Short vertical vs horizontal bars at many 8×8 translations — Chapter 4
    * demo where weight sharing beats a parameter-matched dense net.
    */
-  | "shifted_bars";
+  | "shifted_bars"
+  /**
+   * Multi-token negation sequences (NOT flips GOOD/BAD) — Chapter 5 demo
+   * where attention beats a position-tied dense net on held-out placements.
+   */
+  | "negation";
 
 export interface Sample {
   x: number[];

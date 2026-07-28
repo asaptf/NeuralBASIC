@@ -103,7 +103,7 @@ describe("splitTrainVal — deterministic + stratified", () => {
     expect(split.val).toBeNull();
   });
 
-  it("applies a split to moons, circles, spiral, linear, tiny_*, noisy_moons, shifted_bars", () => {
+  it("applies a split to moons, circles, spiral, linear, tiny_*, noisy_moons, shifted_bars, negation", () => {
     for (const name of [
       "moons",
       "circles",
@@ -113,6 +113,7 @@ describe("splitTrainVal — deterministic + stratified", () => {
       "tiny_text",
       "noisy_moons",
       "shifted_bars",
+      "negation",
     ] as const) {
       const ds = getDataset(name);
       if (ds.samples.length < MIN_SAMPLES_FOR_VAL_SPLIT) continue;

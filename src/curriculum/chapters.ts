@@ -1253,6 +1253,118 @@ A **transformer block** = attention + residual + feed-forward.
 
 Here tokens are feature dimensions of tiny sentiment vectors.
 Watch the attention heatmap after training.`,
+    lesson: [
+      {
+        heading: "One word that changes another",
+        body: `Everything so far has treated an input as a set of independent facts. A pixel was bright or not; a feature had a value. Nothing depended on what a *different* part of the input was doing.
+
+Language is not like that. Consider:
+
+- **good** \u2014 positive
+- **not good** \u2014 negative
+
+The word \`good\` appears in both. Its own contribution flipped because of a word next to it. And \`not\` has no sentiment of its own at all \u2014 it only modifies whatever it finds.
+
+This chapter's dataset, \`negation\`, is that problem stripped bare: four token slots, a vocabulary of \`PAD\`, \`NOT\`, \`GOOD\`, \`BAD\`, and sentences like \`GOOD PAD PAD PAD\` (positive) or \`NOT GOOD PAD PAD\` (negative). \`NOT BAD\` is positive. The sentiment word can sit at any slot, and \`NOT\` can precede it from any other slot.`,
+      },
+      {
+        heading: "Why a bag of words cannot do it",
+        body: `Suppose you throw away order and keep only which words are present. Then the label is:
+
+- has GOOD, no NOT \u2192 positive
+- has BAD, no NOT \u2192 negative
+- has GOOD and NOT \u2192 negative
+- has BAD and NOT \u2192 positive
+
+Look at the shape of that table. It is **XOR** \u2014 the same function that stopped a single neuron in Chapter 1, now between "is it negated" and "which sentiment word". So no linear model over word counts can do it, for exactly the reason a single neuron couldn't separate XOR's corners.
+
+A hidden layer fixes XOR, as Chapter 2 showed. So a dense network *should* manage this, and on the data it trains on, it does \u2014 perfectly. What happens on sentences it hasn't seen is the interesting part.`,
+      },
+      {
+        heading: "A failure worse than guessing",
+        body: `The network sees each slot as its own set of inputs, so \`GOOD\` in slot 1 and \`GOOD\` in slot 2 are unrelated features. With \`val=0.3\` holding back some position pairings, here is a dense network with 577 parameters, measured over 30 runs:
+
+- **training accuracy 100.0%** \u2014 every run, no exceptions
+- **held-out accuracy 15.0%**, ranging 12.5\u201337.5%
+- runs reaching even 75% held-out: **0 out of 30**
+
+Fifteen percent is not "failed to learn". Chance is 50%. This model is reliably, confidently **wrong** on sentences it hasn't seen, which takes some doing.
+
+The mechanism is worth working out, because it's a real failure mode rather than a quirk. From the single-word examples the network learns rules like "GOOD in slot 2 means positive". From the negated examples it learns *pair-specific* corrections: "NOT in slot 0 together with GOOD in slot 1 means negative". Those corrections are attached to the exact pairs it saw. Show it a pairing it hasn't seen and only the bare-word rule fires \u2014 so it confidently reports positive for a negated sentence. Every held-out negated sentence comes out backwards. That's how you land below chance.`,
+        example: {
+          label: "Watch a dense net memorise and invert",
+          dsl: `network TextDense {
+  dense 16 -> 32 activation=relu
+  dense 32 -> 1 activation=sigmoid
+}
+train dataset=negation lr=0.12 epochs=150 val=0.3`,
+          expect:
+            "Training accuracy reaches 100% on every run while the held-out card sits at 15% — below chance. The gap is not overfitting in the usual sense: the model has learned position-specific rules that invert on pairings it never saw.",
+        },
+      },
+      {
+        heading: "What attention does instead",
+        body: `**Attention** gives each position a way to ask about the others.
+
+For every token, the model computes a score against every token \u2014 including itself \u2014 and softmaxes those scores into weights that sum to 1. The token's new representation is the weighted average of all the others. The weights are computed *from the input*, so they differ sentence by sentence: nothing about "look one slot to the left" is baked in.
+
+That is what makes negation learnable in a transferable way. Instead of memorising "NOT in slot 0 with GOOD in slot 1", the model can learn something closer to "a sentiment token should look for a NOT anywhere and flip if it finds one". Learned once, that applies to pairings never seen.
+
+Measured over 30 runs, an attention network with **69 parameters** \u2014 an eighth of the dense net's 577:
+
+- training accuracy **85.8%**, ranging 79\u201392% \u2014 notably *worse* than the dense net's perfect score
+- held-out accuracy **69.2%**, ranging 62.5\u201375%, against the dense net's 15.0%
+- every run beats chance; roughly half clear 70%
+
+It fits the training data less well and generalises far better. By this point in the curriculum that trade should look familiar rather than surprising.`,
+        example: {
+          label: "Let each position look at the others",
+          dsl: `network TinyAttn {
+  attention d_model=4 heads=2
+  dense 4 -> 1 activation=sigmoid
+}
+train dataset=negation lr=0.1 epochs=80 val=0.3`,
+          expect:
+            "Training accuracy lands from 70% to 100%, typically in the mid-80s — below the dense net — while held-out accuracy climbs to 69%, versus 15% for a dense net of 577 parameters against this one's 69. The spread is real, so train it more than once before drawing conclusions.",
+        },
+      },
+      {
+        heading: "Reading the heatmap",
+        body: `The network panel draws the attention matrix once a run finishes: one cell per (from, to) pair of positions, brighter where more weight went. With four slots it's a 4\u00d74 grid per head.
+
+Two maps from a trained run, first head, showing what the model does with different sentences:
+
+For \`GOOD PAD PAD PAD\` \u2014 a plain positive \u2014 every row spreads about evenly across the three PAD slots and puts almost nothing on slot 0:
+
+    [0.02, 0.33, 0.33, 0.33]
+
+For \`NOT GOOD PAD PAD\` \u2014 negated \u2014 the first row changes completely:
+
+    [0.02, 0.98, 0.00, 0.00]
+
+Position 0 holds \`NOT\`, and it sends **98% of its attention to position 1**, which holds the word being negated. The model found the thing it needed to look at.
+
+Do treat this carefully. Attention maps are famously over-read: a bright cell shows where weight went, not *why*, and a model can reach the right answer with a map that looks arbitrary. Here the pattern is clear and reproducible, which makes it worth showing \u2014 but "the map explains the model" is a stronger claim than a heatmap can support.`,
+      },
+      {
+        heading: "Common traps",
+        body: `- **"Attention is just a better layer."** It encodes a different assumption: that any position may need any other, decided per input. Convolution assumed *nearby and position-independent*. Neither is universally right \u2014 on Chapter 4's shifted bars, attention has no locality to exploit.
+- **"Training accuracy tells you which architecture is better."** The dense net scored 100% and the attention net 85%, and the attention net was the better model by a wide margin. Held-out accuracy was the only number that revealed it.
+- **"Below chance means broken."** It means *systematically* wrong, which is information: an inverted prediction says the model learned a real rule and applied it in the wrong regime. A model at exactly chance has learned nothing; a model below chance has learned something misleading.
+- **Reading the heatmap as an explanation.** It shows where weight went. That is evidence, not a proof of reasoning.
+- **Expecting the transformer block to be strictly better.** Measured here it is noisier than bare attention (14 of 30 runs above 75% held-out, versus 25 of 30), because this engine trains its extra parameters with finite differences. More machinery is not automatically more capability.`,
+      },
+      {
+        heading: "Where this leaves you",
+        body: `Five chapters, and the same discipline underneath all of them.
+
+Every one turned on finding what a model's shape makes **impossible**, not on tuning. One neuron cannot bend a line, so XOR is out of reach. Stacked linear layers collapse into one, so depth without nonlinearity buys nothing. A linear readout cannot tell a vertical bar from a horizontal one because both light four pixels. A bag of words cannot see negation, because the label is XOR over its contents.
+
+In each case the fix followed from the diagnosis, and in each case the number on screen that looked best \u2014 training accuracy \u2014 was the one most likely to mislead you. That habit, held-out first and structure before tuning, transfers to every model you will meet after this, including the ones far too large to visualise.
+
+The lab is still here. Every dataset, every layer, every knob \u2014 go and break something on purpose.`,
+      },
+    ],
     starterDSL: defaultStarterDSL("ch5"),
     challenges: [
       {
@@ -1277,7 +1389,7 @@ Watch the attention heatmap after training.`,
               "Train a transformer (or attention) model on tiny_text, accuracy ≥ 0.7.",
             experimentCheck: {
               minAccuracy: 0.7,
-              dataset: "tiny_text",
+              dataset: "negation",
               dslIncludes: ["transformer"],
             },
           },
@@ -1335,7 +1447,7 @@ Watch the attention heatmap after training.`,
             kind: "experiment",
             prompt: "Train with heads=2 (transformer) on tiny_text.",
             experimentCheck: {
-              dataset: "tiny_text",
+              dataset: "negation",
               dslIncludes: ["transformer", "heads"],
             },
           },
@@ -1394,7 +1506,7 @@ Watch the attention heatmap after training.`,
             prompt: "Train either transformer or dense on tiny_text; accuracy ≥ 0.8.",
             experimentCheck: {
               minAccuracy: 0.8,
-              dataset: "tiny_text",
+              dataset: "negation",
             },
           },
           {

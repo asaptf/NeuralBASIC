@@ -49,6 +49,7 @@ const DATASET_LIST = [
   "tiny_text",
   "noisy_moons",
   "shifted_bars",
+  "negation",
 ] as const;
 
 const DATASETS = new Set<string>(DATASET_LIST);
@@ -828,11 +829,14 @@ train dataset=noisy_moons lr=0.08 epochs=400 val=0.3
 train dataset=shifted_bars lr=0.2 epochs=150 val=0.3
 `;
     case "ch5":
-      return `network TinyTransformer {
-  transformer d_model=8 heads=2
-  dense 8 -> 1 activation=sigmoid
+      // d_model MUST divide the 16-feature input on token boundaries: negation is
+      // 4 tokens of 4, so d_model=4. With d_model=8 you get two half-token
+      // fragments and a 1×1 attention map, which teaches nothing.
+      return `network TinyAttn {
+  attention d_model=4 heads=2
+  dense 4 -> 1 activation=sigmoid
 }
-train dataset=tiny_text lr=0.1 epochs=60
+train dataset=negation lr=0.1 epochs=80 val=0.3
 `;
     default:
       return defaultStarterDSL("ch1");

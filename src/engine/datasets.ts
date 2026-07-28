@@ -381,6 +381,89 @@ function makeTinyText(): Dataset {
   };
 }
 
+/**
+ * Multi-token negation sequences for Chapter 5.
+ *
+ * Vocabulary (one-hot, d_model = 4): PAD=0, NOT=1, GOOD=2, BAD=3.
+ * Sequence length = 4. Flat input length = 16; with `attention`/`transformer`
+ * `d_model=4` the engine yields 4 tokens.
+ *
+ * Label rule (multiset XOR / compositional negation):
+ *   - Exactly one sentiment token (GOOD or BAD) per sample.
+ *   - Base polarity: GOOD → 1, BAD → 0.
+ *   - If NOT appears anywhere in the sequence, flip polarity.
+ *   - So: good → +, not good → −, bad → −, not bad → +.
+ *
+ * Why bag-of-words (linear) fails:
+ *   Count vectors form an XOR over {NOT present} × {sentiment}. A linear
+ *   classifier on the bag can get at most 3 of the 4 bag-types right; with
+ *   sample weights (4 bare GOOD, 4 bare BAD, 12 NOT+GOOD, 12 NOT+BAD) the
+ *   hard ceiling is 28/32 = 0.875 (drop a size-4 class). Empirically linear
+ *   plateaus near ~0.6–0.7.
+ *
+ * Why position-tied dense fails held-out positions:
+ *   Flattening 4×4 one-hots gives position-specific weights. Holding out all
+ *   sequences that use slot 3, a large MLP memorizes train slots (~100% train)
+ *   and collapses on test (~30%). Content-based attention transfers.
+ *
+ * Sample count: 4 bare GOOD + 4 bare BAD + 12 NOT+GOOD + 12 NOT+BAD = 32,
+ * balanced 16/16. Fully deterministic (no Math.random).
+ */
+export const NEGATION_VOCAB = ["PAD", "NOT", "GOOD", "BAD"] as const;
+export const NEGATION_SEQ_LEN = 4;
+export const NEGATION_D_MODEL = 4;
+const NEG_PAD = 0;
+const NEG_NOT = 1;
+const NEG_GOOD = 2;
+const NEG_BAD = 3;
+
+function negationOneHot(id: number): number[] {
+  const v = Array.from({ length: NEGATION_D_MODEL }, () => 0);
+  v[id] = 1;
+  return v;
+}
+
+function negationEncode(ids: number[]): number[] {
+  return ids.flatMap(negationOneHot);
+}
+
+function makeNegation(): Dataset {
+  const samples: Sample[] = [];
+
+  // Bare sentiment at each position
+  for (let p = 0; p < NEGATION_SEQ_LEN; p++) {
+    const good = Array.from({ length: NEGATION_SEQ_LEN }, () => NEG_PAD);
+    good[p] = NEG_GOOD;
+    samples.push({ x: negationEncode(good), y: [1] });
+    const bad = Array.from({ length: NEGATION_SEQ_LEN }, () => NEG_PAD);
+    bad[p] = NEG_BAD;
+    samples.push({ x: negationEncode(bad), y: [0] });
+  }
+
+  // NOT + sentiment at all ordered pairs of distinct positions
+  for (let i = 0; i < NEGATION_SEQ_LEN; i++) {
+    for (let j = 0; j < NEGATION_SEQ_LEN; j++) {
+      if (i === j) continue;
+      const ng = Array.from({ length: NEGATION_SEQ_LEN }, () => NEG_PAD);
+      ng[i] = NEG_NOT;
+      ng[j] = NEG_GOOD;
+      samples.push({ x: negationEncode(ng), y: [0] });
+      const nb = Array.from({ length: NEGATION_SEQ_LEN }, () => NEG_PAD);
+      nb[i] = NEG_NOT;
+      nb[j] = NEG_BAD;
+      samples.push({ x: negationEncode(nb), y: [1] });
+    }
+  }
+
+  return {
+    name: "negation",
+    samples,
+    inputShape: [NEGATION_SEQ_LEN * NEGATION_D_MODEL],
+    outputDim: 1,
+    kind: "classification",
+  };
+}
+
 const CACHE: Partial<Record<DatasetName, Dataset>> = {};
 
 export function getDataset(name: DatasetName, seedRefresh = false): Dataset {
@@ -420,6 +503,9 @@ export function getDataset(name: DatasetName, seedRefresh = false): Dataset {
     case "shifted_bars":
       ds = makeShiftedBars();
       break;
+    case "negation":
+      ds = makeNegation();
+      break;
     default:
       ds = makeXor();
   }
@@ -439,4 +525,5 @@ export const DATASET_NAMES: DatasetName[] = [
   "tiny_text",
   "noisy_moons",
   "shifted_bars",
+  "negation",
 ];

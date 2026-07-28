@@ -502,8 +502,10 @@ describe("lesson examples: runnable + finite + reproducible", () => {
       expect(once.accuracy).toBeGreaterThanOrEqual(0);
       expect(once.accuracy).toBeLessThanOrEqual(1);
       expect(once.loss).toBeGreaterThanOrEqual(0);
-    });
+    }, 60_000);
 
+    // Attention layers train by finite differences here, so a 5-run sample of an
+    // attention example needs well past vitest's 5s default.
     it(`${label}: distribution over ${REPEATS} runs stays finite and teachable`, () => {
       const dist = sampleDistribution(example.dsl, REPEATS);
       expect(
@@ -531,7 +533,7 @@ describe("lesson examples: runnable + finite + reproducible", () => {
           `${label}: accuracy span ${(span * 100).toFixed(1)}pp across ${REPEATS} runs is too wide to teach a point estimate from`
         ).toBeLessThanOrEqual(0.35);
       }
-    });
+    }, 120_000);
   }
 });
 
@@ -553,7 +555,8 @@ describe("lesson examples: expect-string numeric claims", () => {
       const dist = sampleDistribution(example.dsl, REPEATS);
       expect(dist.allFinite).toBe(true);
       assertClaims(label, example, dist, claims);
-    });
+      // Attention examples train by finite differences and need more than the 5s default.
+    }, 120_000);
   }
 });
 

@@ -308,17 +308,19 @@ train dataset=tiny_text lr=0.1 epochs=40
         epochsCap: 40,
       };
     case "ch5-c3":
+      // The gate checks *training* accuracy, and on `negation` a dense net fits
+      // the training portion perfectly (it is the held-out score that collapses —
+      // which is the chapter's whole point). Input is 16 features, not 8.
       return {
-        label: "transformer or dense on tiny_text (≥0.8)",
-        // Dense bag-of-features is a valid alternative per the prompt
+        label: "dense bag-of-features on negation (≥0.8 train)",
         dsl: `network TextDense {
-  dense 8 -> 16 activation=relu
-  dense 16 -> 1 activation=sigmoid
+  dense 16 -> 32 activation=relu
+  dense 32 -> 1 activation=sigmoid
 }
-train dataset=tiny_text lr=0.2 epochs=120
+train dataset=negation lr=0.12 epochs=150
 `,
         attempts: 4,
-        epochsCap: 120,
+        epochsCap: 150,
       };
 
     default:
