@@ -49,11 +49,37 @@ function makeOr(): Dataset {
   };
 }
 
+/**
+ * Deterministic unit noise in [-1, 1] from sample index + salt.
+ * Used so toy / noisy_* / image datasets never call Math.random() and stay
+ * cache-stable across processes.
+ */
+function detUnit(i: number, salt: number): number {
+  let h = Math.imul(i + 1, 2654435761) ^ Math.imul(salt, 1597334677);
+  h = Math.imul(h ^ (h >>> 16), 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 3266489917);
+  return ((h >>> 0) / 4294967296) * 2 - 1;
+}
+
+/**
+ * Half-unit noise in [-0.5, 0.5] — matches the support of the former
+ * `(Math.random() - 0.5)` jitter so geometry/spread stay the same after
+ * the deterministic conversion.
+ */
+function detHalf(i: number, salt: number): number {
+  return detUnit(i, salt) * 0.5;
+}
+
+/**
+ * Linearly separable 2-D cloud. Fully deterministic (no Math.random).
+ * Points are uniform in the square via detUnit; label is sign of x+y.
+ */
 function makeLinear(): Dataset {
   const samples: Sample[] = [];
   for (let i = 0; i < 40; i++) {
-    const x = Math.random() * 2 - 1;
-    const y = Math.random() * 2 - 1;
+    // salts 5/9 yield a balanced 20/20 label split on n=40
+    const x = detUnit(i, 5);
+    const y = detUnit(i, 9);
     samples.push({ x: [x, y], y: [x + y > 0 ? 1 : 0] });
   }
   return {
@@ -66,21 +92,33 @@ function makeLinear(): Dataset {
   };
 }
 
-/** Two interleaving moons (classic sklearn-style toy set). */
+/**
+ * Two interleaving moons (classic sklearn-style toy set).
+ * Positional jitter uses detHalf so the spread matches the former
+ * `(Math.random()-0.5)*noise` draws. Fully deterministic.
+ */
 function makeMoons(n = 80, noise = 0.08): Dataset {
   const samples: Sample[] = [];
   const half = Math.floor(n / 2);
   for (let i = 0; i < half; i++) {
     const t = (Math.PI * i) / (half - 1 || 1);
-    const x = Math.cos(t) + (Math.random() - 0.5) * noise;
-    const y = Math.sin(t) + (Math.random() - 0.5) * noise;
-    samples.push({ x: [x, y], y: [0] });
+    samples.push({
+      x: [
+        Math.cos(t) + detHalf(i, 11) * noise,
+        Math.sin(t) + detHalf(i, 22) * noise,
+      ],
+      y: [0],
+    });
   }
   for (let i = 0; i < n - half; i++) {
     const t = (Math.PI * i) / (n - half - 1 || 1);
-    const x = 1 - Math.cos(t) + (Math.random() - 0.5) * noise;
-    const y = 0.5 - Math.sin(t) + (Math.random() - 0.5) * noise;
-    samples.push({ x: [x, y], y: [1] });
+    samples.push({
+      x: [
+        1 - Math.cos(t) + detHalf(i + half, 11) * noise,
+        0.5 - Math.sin(t) + detHalf(i + half, 22) * noise,
+      ],
+      y: [1],
+    });
   }
   return {
     name: "moons",
@@ -92,6 +130,10 @@ function makeMoons(n = 80, noise = 0.08): Dataset {
   };
 }
 
+/**
+ * Concentric circles. Jitter via detHalf (same magnitude as the former
+ * Math.random draws). Fully deterministic.
+ */
 function makeCircles(n = 80, noise = 0.05, factor = 0.5): Dataset {
   const samples: Sample[] = [];
   const half = Math.floor(n / 2);
@@ -99,8 +141,8 @@ function makeCircles(n = 80, noise = 0.05, factor = 0.5): Dataset {
     const t = (2 * Math.PI * i) / half;
     samples.push({
       x: [
-        Math.cos(t) + (Math.random() - 0.5) * noise,
-        Math.sin(t) + (Math.random() - 0.5) * noise,
+        Math.cos(t) + detHalf(i, 13) * noise,
+        Math.sin(t) + detHalf(i, 17) * noise,
       ],
       y: [0],
     });
@@ -109,8 +151,8 @@ function makeCircles(n = 80, noise = 0.05, factor = 0.5): Dataset {
     const t = (2 * Math.PI * i) / (n - half);
     samples.push({
       x: [
-        factor * Math.cos(t) + (Math.random() - 0.5) * noise,
-        factor * Math.sin(t) + (Math.random() - 0.5) * noise,
+        factor * Math.cos(t) + detHalf(i + half, 13) * noise,
+        factor * Math.sin(t) + detHalf(i + half, 17) * noise,
       ],
       y: [1],
     });
@@ -125,18 +167,23 @@ function makeCircles(n = 80, noise = 0.05, factor = 0.5): Dataset {
   };
 }
 
+/**
+ * Two interleaved spirals. Radial noise on x only (same as before), via
+ * detHalf so magnitude matches `(Math.random()-0.5)*0.1`. Fully deterministic.
+ */
 function makeSpiral(n = 60): Dataset {
   const samples: Sample[] = [];
+  const spiralNoise = 0.1;
   for (let i = 0; i < n; i++) {
     const r = i / n;
     const t = (4 * Math.PI * i) / n;
     samples.push({
-      x: [r * Math.cos(t) + (Math.random() - 0.5) * 0.1, r * Math.sin(t)],
+      x: [r * Math.cos(t) + detHalf(i, 19) * spiralNoise, r * Math.sin(t)],
       y: [0],
     });
     samples.push({
       x: [
-        r * Math.cos(t + Math.PI) + (Math.random() - 0.5) * 0.1,
+        r * Math.cos(t + Math.PI) + detHalf(i + n, 19) * spiralNoise,
         r * Math.sin(t + Math.PI),
       ],
       y: [1],
@@ -150,17 +197,6 @@ function makeSpiral(n = 60): Dataset {
     kind: "classification",
     featureNames: ["x", "y"],
   };
-}
-
-/**
- * Deterministic unit noise in [-1, 1] from sample index + salt.
- * Used so noisy_* / image datasets never call Math.random() and stay cache-stable.
- */
-function detUnit(i: number, salt: number): number {
-  let h = Math.imul(i + 1, 2654435761) ^ Math.imul(salt, 1597334677);
-  h = Math.imul(h ^ (h >>> 16), 2246822519);
-  h = Math.imul(h ^ (h >>> 13), 3266489917);
-  return ((h >>> 0) / 4294967296) * 2 - 1;
 }
 
 /** Map detUnit → [0, 1) for Bernoulli-style flips. */
