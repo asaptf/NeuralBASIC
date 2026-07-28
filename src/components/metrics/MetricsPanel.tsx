@@ -28,6 +28,32 @@ function polyline(
     .join(" ");
 }
 
+/** Band between two series, for shading the train-vs-held-out gap. */
+function bandPolygon(
+  a: number[],
+  b: number[],
+  yMin: number,
+  yMax: number
+): string {
+  const n = Math.min(a.length, b.length);
+  if (n < 2) return "";
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+  const span = yMax - yMin || 1;
+  const at = (v: number, i: number) => {
+    const x = PAD_L + (i / (n - 1)) * plotW;
+    const y = PAD_T + plotH - ((v - yMin) / span) * plotH;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  };
+  const top = a.slice(0, n).map(at).join(" ");
+  const bottom = b
+    .slice(0, n)
+    .map(at)
+    .reverse()
+    .join(" ");
+  return `${top} ${bottom}`;
+}
+
 /** Curve closed back along a baseline, so the enclosed area can be filled. */
 function areaPolygon(
   values: number[],
@@ -51,6 +77,9 @@ function Chart({
   baseline,
   baselineLabel,
   shadeAgainstBaseline = false,
+  compare,
+  compareLabel,
+  shadeGap = false,
   testId,
 }: {
   label: string;
@@ -63,6 +92,11 @@ function Chart({
   baselineLabel?: string;
   /** Fill between curve and baseline, tinted by which side it's on. */
   shadeAgainstBaseline?: boolean;
+  /** Second series drawn dashed — the held-out counterpart of `values`. */
+  compare?: number[];
+  compareLabel?: string;
+  /** Shade the area between the two series: that gap is the overfitting. */
+  shadeGap?: boolean;
   testId?: string;
 }) {
   const plotW = W - PAD_L - PAD_R;
@@ -75,7 +109,15 @@ function Chart({
 
   return (
     <div>
-      <div className="chart-label">{label}</div>
+      <div className="chart-label">
+        <span>{label}</span>
+        {compare && compare.length > 1 && (
+          <span className="chart-legend">
+            <span className="chart-legend-solid" /> train
+            <span className="chart-legend-dashed" /> {compareLabel ?? "held-out"}
+          </span>
+        )}
+      </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="chart-svg"
@@ -153,6 +195,25 @@ function Chart({
           </>
         )}
 
+        {shadeGap && compare && compare.length > 1 && values.length > 1 && (
+          <polygon
+            className="chart-gap-band"
+            points={bandPolygon(values, compare, yMin, yMax)}
+          />
+        )}
+
+        {compare && compare.length > 1 && (
+          <polyline
+            fill="none"
+            stroke={color}
+            strokeWidth="1.5"
+            strokeDasharray="3 2"
+            opacity="0.75"
+            vectorEffect="non-scaling-stroke"
+            points={polyline(compare, yMin, yMax)}
+          />
+        )}
+
         {values.length > 1 && (
           <polyline
             fill="none"
@@ -188,11 +249,16 @@ export function MetricsPanel() {
 
   const losses = history.losses;
   const accuracies = history.accuracies;
+  const valLosses = history.valLosses ?? [];
+  const valAccuracies = history.valAccuracies ?? [];
+  const hasVal = valAccuracies.length > 1;
+  const valAcc = snapshot?.valAccuracy;
 
   // Autoscale loss to the range actually observed, so small-but-real changes
   // are visible instead of being flattened against a hardcoded ceiling.
-  const lossMax = losses.length ? Math.max(...losses) : 1;
-  const lossMin = losses.length ? Math.min(...losses) : 0;
+  const allLoss = [...losses, ...valLosses];
+  const lossMax = allLoss.length ? Math.max(...allLoss) : 1;
+  const lossMin = allLoss.length ? Math.min(...allLoss) : 0;
   const lossPad = (lossMax - lossMin) * 0.12 || Math.max(lossMax * 0.1, 0.01);
   const lossTop = lossMax + lossPad;
   const lossBottom = Math.max(0, lossMin - lossPad);
@@ -221,10 +287,25 @@ export function MetricsPanel() {
             hintTone={delta == null ? undefined : delta <= 0 ? "good" : "bad"}
           />
           <Metric
-            label="Accuracy"
+            label={hasVal ? "Accuracy · train" : "Accuracy"}
             value={snapshot ? `${(snapshot.accuracy * 100).toFixed(1)}%` : "—"}
             testId="metric-accuracy"
           />
+          {valAcc != null && (
+            <Metric
+              label="Accuracy · held-out"
+              value={`${(valAcc * 100).toFixed(1)}%`}
+              testId="metric-val-accuracy"
+              hint={
+                snapshot
+                  ? `${snapshot.accuracy - valAcc >= 0 ? "gap " : "ahead "}${Math.abs((snapshot.accuracy - valAcc) * 100).toFixed(1)}pp`
+                  : undefined
+              }
+              hintTone={
+                snapshot && snapshot.accuracy - valAcc >= 0.05 ? "bad" : "good"
+              }
+            />
+          )}
           <Metric
             label="Epoch"
             value={snapshot ? String(snapshot.epoch) : "—"}
@@ -245,6 +326,7 @@ export function MetricsPanel() {
           yMax={lossTop}
           color="var(--series-loss)"
           format={(n) => n.toFixed(3)}
+          compare={valLosses}
           testId="loss-chart"
         />
 
@@ -258,6 +340,8 @@ export function MetricsPanel() {
           baseline={0.5}
           baselineLabel="chance"
           shadeAgainstBaseline
+          compare={valAccuracies}
+          shadeGap
           testId="accuracy-chart"
         />
         {losses.length === 0 && (

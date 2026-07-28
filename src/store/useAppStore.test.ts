@@ -314,7 +314,12 @@ train dataset=and lr=0.5 epochs=40
     expect(s.epochsRun).toBe(0);
     expect(s.totalEpochs).toBe(0);
     expect(s.weights).toEqual([]);
-    expect(s.history).toEqual({ losses: [], accuracies: [] });
+    expect(s.history).toEqual({
+      losses: [],
+      accuracies: [],
+      valLosses: [],
+      valAccuracies: [],
+    });
     expect(s.lastSnapshot).toBeNull();
 
     // Loop must stay dead after reset.
@@ -383,7 +388,12 @@ describe("useAppStore — state coherence", () => {
     const cleared = store.getState();
     expect(cleared.trainConfig.dataset).toBe("xor");
     expect(cleared.lastSnapshot).toBeNull();
-    expect(cleared.history).toEqual({ losses: [], accuracies: [] });
+    expect(cleared.history).toEqual({
+      losses: [],
+      accuracies: [],
+      valLosses: [],
+      valAccuracies: [],
+    });
     expect(cleared.epochsRun).toBe(0);
     expect(cleared.totalEpochs).toBe(0);
     expect(cleared.weights).toEqual([]);

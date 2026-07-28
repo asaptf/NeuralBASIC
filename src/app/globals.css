@@ -1196,3 +1196,39 @@ html[data-theme="retro"] .panel-header {
     transform: none;
   }
 }
+
+/* The band between the training and held-out curves *is* the overfitting, so it
+   gets drawn rather than left for the reader to eyeball across two lines. */
+.chart-gap-band {
+  fill: var(--bad);
+  opacity: 0.18;
+}
+
+.chart-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.chart-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.8;
+}
+
+.chart-legend-solid,
+.chart-legend-dashed {
+  display: inline-block;
+  width: 12px;
+  height: 0;
+  border-top: 2px solid currentColor;
+}
+
+.chart-legend-dashed {
+  border-top-style: dashed;
+}

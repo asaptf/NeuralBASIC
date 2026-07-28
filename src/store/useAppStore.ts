@@ -73,7 +73,13 @@ interface AppState {
   network: NetworkConfig;
   trainConfig: TrainConfig;
   weights: LayerWeights[];
-  history: { losses: number[]; accuracies: number[] };
+  history: {
+    losses: number[];
+    accuracies: number[];
+    /** Held-out series. Empty when the dataset was too small to split. */
+    valLosses: number[];
+    valAccuracies: number[];
+  };
   lastSnapshot: TrainStepResult | null;
   isTraining: boolean;
   isPaused: boolean;
@@ -290,7 +296,13 @@ export const useAppStore = create<AppState>((set, get) => {
   const applyLoadedExperiment = (exp: ExperimentState) => {
     cancelLoop();
     session = null;
-    const history = exp.history ?? { losses: [], accuracies: [] };
+    // Files saved before held-out metrics existed carry no val series.
+    const history = {
+      losses: exp.history?.losses ?? [],
+      accuracies: exp.history?.accuracies ?? [],
+      valLosses: exp.history?.valLosses ?? [],
+      valAccuracies: exp.history?.valAccuracies ?? [],
+    };
     const weights = exp.weights ?? [];
     const snapshot = snapshotFromWeights(exp.network, exp.trainConfig, weights);
     set({
@@ -316,7 +328,7 @@ export const useAppStore = create<AppState>((set, get) => {
     session = null;
     set({
       weights: [],
-      history: { losses: [], accuracies: [] },
+      history: { losses: [], accuracies: [], valLosses: [], valAccuracies: [] },
       lastSnapshot: null,
       isTraining: false,
       isPaused: false,
@@ -332,6 +344,10 @@ export const useAppStore = create<AppState>((set, get) => {
       history: {
         losses: session.losses.slice(),
         accuracies: session.accuracies.slice(),
+        valLosses: session.valLosses ? session.valLosses.slice() : [],
+        valAccuracies: session.valAccuracies
+          ? session.valAccuracies.slice()
+          : [],
       },
       lastSnapshot: session.lastSnapshot,
       epochsRun: session.epochsRun,
@@ -441,7 +457,7 @@ export const useAppStore = create<AppState>((set, get) => {
     network: init.network,
     trainConfig: init.trainConfig,
     weights: [],
-    history: { losses: [], accuracies: [] },
+    history: { losses: [], accuracies: [], valLosses: [], valAccuracies: [] },
     lastSnapshot: null,
     isTraining: false,
     isPaused: false,
@@ -524,7 +540,7 @@ export const useAppStore = create<AppState>((set, get) => {
       set({
         dsl,
         weights: [],
-        history: { losses: [], accuracies: [] },
+        history: { losses: [], accuracies: [], valLosses: [], valAccuracies: [] },
         lastSnapshot: null,
         isTraining: false,
         isPaused: false,
@@ -569,7 +585,7 @@ export const useAppStore = create<AppState>((set, get) => {
           network: parsed.network,
           trainConfig: parsed.train,
           weights: [],
-          history: { losses: [], accuracies: [] },
+          history: { losses: [], accuracies: [], valLosses: [], valAccuracies: [] },
           lastSnapshot: null,
           isTraining: true,
           isPaused: false,
@@ -650,7 +666,7 @@ export const useAppStore = create<AppState>((set, get) => {
           network: parsed.network,
           trainConfig: parsed.train,
           weights: [],
-          history: { losses: [], accuracies: [] },
+          history: { losses: [], accuracies: [], valLosses: [], valAccuracies: [] },
           lastSnapshot: null,
           totalEpochs: epochs,
           epochsRun: 0,
@@ -681,7 +697,7 @@ export const useAppStore = create<AppState>((set, get) => {
       session = null;
       set({
         weights: [],
-        history: { losses: [], accuracies: [] },
+        history: { losses: [], accuracies: [], valLosses: [], valAccuracies: [] },
         lastSnapshot: null,
         isTraining: false,
         isPaused: false,
@@ -704,7 +720,7 @@ export const useAppStore = create<AppState>((set, get) => {
         network: parsed.network,
         trainConfig: parsed.train,
         weights: [],
-        history: { losses: [], accuracies: [] },
+        history: { losses: [], accuracies: [], valLosses: [], valAccuracies: [] },
         lastSnapshot: null,
         isTraining: false,
         isPaused: false,

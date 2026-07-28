@@ -10,7 +10,13 @@ export interface ExperimentState {
   network: NetworkConfig;
   trainConfig: TrainConfig;
   weights?: LayerWeights[];
-  history?: { losses: number[]; accuracies: number[] };
+  history?: {
+    losses: number[];
+    accuracies: number[];
+    /** Held-out series; absent in files saved before validation metrics existed. */
+    valLosses?: number[];
+    valAccuracies?: number[];
+  };
   name?: string;
   savedAt?: string;
 }
