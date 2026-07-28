@@ -247,6 +247,21 @@ html[data-theme="retro"] .logo-tile {
   color: var(--text);
 }
 
+/* Square variant for a button whose whole content is an icon. `.btn`'s padding
+   is tuned for a text label and leaves an icon in a lopsided box.
+
+   Width is a floor, not a fixed size, so it can't fight the 34px `min-height`
+   touch target set further down — setting an explicit height here just loses to
+   that rule and yields a 30×34 rectangle. Matching the floor gives a square that
+   lines up with the text buttons beside it. */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 0;
+}
+
 /* Groups the quiet actions so they read as one cluster, not four strays. */
 .btn-cluster {
   display: inline-flex;

@@ -5,6 +5,7 @@ import { ChapterNav } from "@/components/curriculum/ChapterNav";
 import { ImmediateControls } from "@/components/controls/ImmediateControls";
 import { CodeEditor } from "@/components/editor/CodeEditor";
 import { DataLab } from "@/components/lab/DataLab";
+import { GitHubLink } from "@/components/ide/GitHubLink";
 import { Logo } from "@/components/ide/Logo";
 import { LessonView } from "@/components/curriculum/LessonView";
 import { MetricsPanel } from "@/components/metrics/MetricsPanel";
@@ -137,6 +138,7 @@ export function IdeShell() {
               Retro Blue
             </button>
           </div>
+          <GitHubLink />
         </div>
       </header>
 
