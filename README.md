@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/asaptf/NeuralBASIC/actions/workflows/ci.yml/badge.svg)](https://github.com/asaptf/NeuralBASIC/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-288-brightgreen.svg)](#every-number-in-the-lessons-is-tested)
+[![Lesson figures: tested](https://img.shields.io/badge/lesson%20figures-tested-brightgreen.svg)](#every-number-in-the-lessons-is-tested)
 
 **[→ Try it in your browser](https://asaptf.github.io/NeuralBASIC/)** — no install, no account, nothing
 leaves your machine.
