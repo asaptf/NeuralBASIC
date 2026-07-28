@@ -948,7 +948,113 @@ Everything so far has treated inputs as a flat list of numbers — two coordinat
 output(y,x) = Σ_c Σ_{ky,kx} K_{c,ky,kx} · input(c, y+ky, x+kx) + b
 
 Weight **sharing** detects the same pattern everywhere.
-Our toy set: vertical vs horizontal bars on 4×4 grids.`,
+Two sets here: \`tiny_images\` (4×4, where a linear readout provably caps at 75%) and \`shifted_bars\` (8×8, the motif at many positions \u2014 where sharing finally pays).`,
+    lesson: [
+      {
+        heading: "A task about arrangement, not intensity",
+        body: `Start with \`tiny_images\`: 4×4 grids holding a single bar, vertical or horizontal, and your job is to tell which.
+
+Look at what distinguishes them. A vertical bar lights four pixels. A horizontal bar lights four pixels. **The same number.** Nothing about how much ink is on the page separates these classes — only where it sits relative to itself.
+
+That has a sharp consequence, and it's provable rather than merely likely. A linear readout scores an image by \`w·x + b\`. For a vertical bar in column j the score is the sum of column j of the weights; for a horizontal bar in row i it's the sum of row i. But the sum of all column sums and the sum of all row sums are the same number — they're both the sum of every weight. So you cannot have every column sum above a threshold *and* every row sum below it. No single linear function can do this, ever.
+
+Measured over 25 runs, a linear readout lands on **exactly 75%** every single time, with zero variation. Not "usually about 75%" — the same number, run after run, because it is a structural ceiling rather than a training difficulty.`,
+        example: {
+          label: "Watch a linear readout hit its ceiling",
+          dsl: `network LinearReadout {
+  dense 16 -> 2 activation=sigmoid
+}
+train dataset=tiny_images lr=0.12 epochs=200`,
+          expect:
+            "Accuracy parks at around 75% and does not move — train it repeatedly and you get the identical number, because this is a limit of the model's shape rather than bad luck or too few epochs.",
+        },
+      },
+      {
+        heading: "What a convolution actually does",
+        body: `A **convolution** takes a small grid of weights — a **kernel** — and slides it over every position in the image, multiplying and summing as it goes. One kernel, applied everywhere, producing a map of "how strongly does this pattern appear here?"
+
+The important word is *everywhere*. A dense layer gives every pixel its own private weight, so "bright pixel at position 5" and "bright pixel at position 6" are unrelated facts it must learn separately. A kernel has one set of weights used at all positions, so learning what the pattern looks like happens once and applies wherever it occurs. That's **weight sharing**, and it is the entire idea.
+
+Open the Data Lab on an image dataset and you can see the kernels the network settled on, one swatch per filter, green for positive weights and red for negative.`,
+      },
+      {
+        heading: "When sharing buys you nothing",
+        body: `Here is where the usual telling of this story goes wrong. Convolution is not simply better than a dense layer; it is better under conditions, and \`tiny_images\` does not meet them.
+
+Measured over 20 runs each on \`tiny_images\`:
+
+- **conv 4 filters + dense 8** — 98.4% accuracy, 334 parameters
+- **dense 16→8→2** — 99.1% accuracy, **154 parameters**
+
+The dense net wins, with less than half the parameters. And that's correct for this data: a 4×4 grid has only four possible bar positions, and all four appear in the training set. There is nothing to generalise *to* — the dense layer can memorise all four cases and be done. Weight sharing pays off when you cannot afford to learn every position separately, and here you can.
+
+If a technique doesn't help, the useful question is what it needs in order to.`,
+      },
+      {
+        heading: "The conditions where it pays",
+        body: `\`shifted_bars\` supplies them: 8×8 grids, the same bar motif placed at many different positions, and a held-out split so some positions are scored without having been trained on.
+
+Now the asymmetry bites. A dense layer must learn "bar at row 3" and "bar at row 4" as unrelated facts, so a position it never saw is a position it has no weights for. A shared kernel learns "bar" once, and a bar in an unseen place still triggers it.
+
+Measured with \`val=0.3\`, over 25 runs:
+
+- **big dense, 2,642 parameters** — training 100.0%, held-out **85.6%**
+- **conv + global pooling, 50 parameters** — training 99.1%, held-out **96.6%**
+
+Fifty parameters beat two and a half thousand on the data that mattered. Note also the shape of the dense net's failure: a perfect training score and a much worse held-out one, which is exactly the signature Chapter 3 taught you to look for. It memorised positions.`,
+        example: {
+          label: "Convolution with global pooling",
+          dsl: `network ShiftedCNN {
+  conv2d filters=4 kernel=3 activation=relu channels=1 height=8 width=8
+  pool mode=avg global=true
+  dense 2 activation=sigmoid
+}
+train dataset=shifted_bars lr=0.2 epochs=150 val=0.3`,
+          expect:
+            "Training accuracy lands from 80% to 100%, and the held-out card stays close behind it at roughly 97% — a small gap, from a network of fifty parameters. Compare that held-out number against a dense net twenty times its size.",
+        },
+      },
+      {
+        heading: "Pooling is what makes it work",
+        body: `One piece is doing more work than it looks. The kernel detects the pattern anywhere — but the layer *after* it still receives a map with a value per position. Flatten that map into a dense layer and you're back to position-specific weights: the readout has to learn "detector fired at position 12" separately from "detector fired at position 13". You kept the sharing in the detector and threw it away at the desk.
+
+**Pooling** collapses the map. Global average pooling reduces each filter's whole map to one number: *how much did this pattern appear at all*, with position discarded on purpose.
+
+The difference isn't subtle. The same convolutional network with \`flatten\` instead of pooling, measured over 25 runs:
+
+- **conv → pool → dense** — training 99.1%, held-out 96.6%
+- **conv → flatten → dense** — training **61.9%** on average, held-out 59.6%
+
+That average hides the real shape of it. The outcome is *bimodal*: most runs land on exactly 50% — chance, the network having given up entirely — and a few stumble onto a working solution near 100%. The mean of 62% describes almost no individual run. It's worth internalising that a mean over a bimodal outcome is a number that never happens.
+
+Either way, removing pooling doesn't shave a few points off; it collapses the network below the plain dense baseline. Translation invariance is not a property of convolution alone — it's convolution *plus* a readout that ignores position.`,
+        example: {
+          label: "Remove the pooling and watch it collapse",
+          dsl: `network NoPool {
+  conv2d filters=4 kernel=3 activation=relu channels=1 height=8 width=8
+  flatten
+  dense 8 activation=relu
+  dense 2 activation=sigmoid
+}
+train dataset=shifted_bars lr=0.2 epochs=150 val=0.3`,
+          expect:
+            "Bimodal and mostly broken: across runs it lands from 45% to 100%, but the common outcome is exactly 50% — chance — with the occasional run stumbling onto a solution. Far worse than the pooled version, and worse than a plain dense net. The kernels are still shared; the readout no longer is.",
+        },
+      },
+      {
+        heading: "Common traps",
+        body: `- **"CNNs are better for images."** Better *when position varies and you can't enumerate it*. On four positions all present in training, a dense net won with fewer parameters — measured above.
+- **"Adding conv2d makes a network translation-invariant."** Only with a position-discarding readout. With \`flatten\` the invariance is thrown away immediately, and the measured result is a collapse to 62%.
+- **"Fewer parameters means less capable."** The 50-parameter CNN beat the 2,642-parameter dense net on held-out data. Parameters are not capability; the right *structure* for the problem is.
+- **Reading kernels as tidy edge detectors.** Some of them do come out looking structured, and it's tempting to narrate every one. Most are redundant or uninterpretable, exactly as with hidden units in Chapter 2.`,
+      },
+      {
+        heading: "Where this goes next",
+        body: `Convolution built in an assumption about the data: that a pattern means the same thing wherever it appears, and that what matters is nearby. That assumption is what bought you generalisation on fifty parameters.
+
+Some data has structure that assumption fits badly. In a sentence, the word that determines your meaning may be far away and its position may vary — "not" changes everything about the word it precedes, and there is no fixed distance at which to look. Chapter 5 introduces **attention**, whose assumption is different: let each position decide, for itself, which other positions matter.`,
+      },
+    ],
     starterDSL: defaultStarterDSL("ch4"),
     challenges: [
       {

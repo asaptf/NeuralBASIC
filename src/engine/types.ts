@@ -27,6 +27,21 @@ export type LayerConfig =
       type: "flatten";
     }
   | {
+      /**
+       * Spatial pooling over feature maps (after conv2d).
+       * - `global: true` collapses each channel to one scalar (H×W → 1×1).
+       * - Otherwise a window of `size×size` with `stride` (defaults: size=2, stride=size).
+       */
+      type: "pool";
+      mode: "max" | "avg";
+      /** Window side length; ignored when `global` is true. */
+      size?: number;
+      /** Stride; defaults to `size`. Ignored when `global` is true. */
+      stride?: number;
+      /** Global (per-channel) pooling — translation-invariant readout. */
+      global?: boolean;
+    }
+  | {
       type: "attention";
       dModel: number;
       nHeads?: number;

@@ -179,13 +179,14 @@ train dataset=xor lr=0.5 epochs=100
   dense 2 -> 4
   dense 1
   conv2d
+  pool
   flatten
   attention
   transformer
 }
 train dataset=and
 `);
-    expect(parsed.network.layers).toHaveLength(6);
+    expect(parsed.network.layers).toHaveLength(7);
     expect(parsed.network.layers[0]).toMatchObject({
       type: "dense",
       units: 4,
@@ -196,6 +197,12 @@ train dataset=and
       filters: 4,
       kernelSize: 2,
       activation: "relu",
+    });
+    expect(parsed.network.layers[3]).toMatchObject({
+      type: "pool",
+      mode: "max",
+      size: 2,
+      stride: 2,
     });
     expect(parsed.train.dataset).toBe("and");
     expect(parsed.train.learningRate).toBe(0.5);

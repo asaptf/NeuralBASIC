@@ -81,6 +81,22 @@ export function toPyTorchSnippet(
       idx++;
     } else if (l.type === "flatten") {
       lines.push("        layers.append(nn.Flatten())");
+    } else if (l.type === "pool") {
+      if (l.global) {
+        lines.push(
+          l.mode === "max"
+            ? "        layers.append(nn.AdaptiveMaxPool2d(1))"
+            : "        layers.append(nn.AdaptiveAvgPool2d(1))"
+        );
+      } else {
+        const size = l.size ?? 2;
+        const stride = l.stride ?? size;
+        lines.push(
+          l.mode === "max"
+            ? `        layers.append(nn.MaxPool2d(kernel_size=${size}, stride=${stride}))`
+            : `        layers.append(nn.AvgPool2d(kernel_size=${size}, stride=${stride}))`
+        );
+      }
     } else if (l.type === "attention" || l.type === "transformer_block") {
       const d = l.dModel;
       const h = l.nHeads ?? 2;

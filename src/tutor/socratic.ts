@@ -172,7 +172,7 @@ function hintForChapter(ctx: TutorContext): string {
     case "ch3":
       return `Hint: train the wide net on \`noisy_moons\` with l2=0 and compare the two accuracy cards — training against held-out. Then set l2=0.005 and look again. Which number got better, and which got worse?`;
     case "ch4":
-      return `Hint: keep the image path — conv2d → flatten → dense. If accuracy is low, try more epochs or a slightly higher lr (still small). What should a "vertical bar" filter respond to?`;
+      return `Hint: the path that works is conv2d → \`pool global=true\` → dense. Try replacing the pool with \`flatten\` and compare held-out accuracy — then explain what the pooling was doing for you.`;
     case "ch5":
       return `Hint: use \`transformer d_model=8 heads=2\` then a dense output on tiny_text. After training, read the attention heatmap before asking for architecture changes.`;
     default:

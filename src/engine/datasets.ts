@@ -210,20 +210,21 @@ function makeTinyImages(): Dataset {
 }
 
 /**
- * 8×8 images: a short vertical bar vs a short horizontal bar placed at many
- * translations. Designed so weight sharing pays — there are far more positions
- * than a parameter-matched dense net can specialise per location, while a
- * small conv kernel learns the motif once.
+ * 8×8 images: a short vertical bar vs a short horizontal bar at many
+ * translations. Deterministic (no Math.random).
  *
- * Clean patterns only (no positional jitter). Mild deterministic salt-and-pepper
- * on a second copy of each placement so the set is not purely combinatorial.
+ * Motivation: `tiny_images` exhausts every bar position in 16 samples, so a
+ * dense net memorizes locations and weight sharing buys nothing. Here there
+ * are many more placements (and mild noise copies), which is the regime
+ * where sharing *should* help. With global pooling after conv2d the dense head
+ * is translation-invariant and a small CNN beats a larger dense baseline on
+ * held-out accuracy (see shifted_bars tests). Without pooling, flatten leaves
+ * the head position-specific and dense can match by memorizing locations.
  *
  * Layout (BAR_LEN=3 on 8×8):
  *   vertical placements:   (8-3+1)×8 = 48
  *   horizontal placements: 8×(8-3+1) = 48
  *   ×2 (clean + noisy) → 192 samples, balanced 96/96.
- *
- * Fully deterministic (no Math.random).
  */
 function makeShiftedBars(size = 8, barLen = 3, noiseRate = 0.04): Dataset {
   const samples: Sample[] = [];

@@ -19,6 +19,10 @@ function layerLabel(l: LayerConfig): string {
       return `conv ${l.filters}×${l.kernelSize}`;
     case "flatten":
       return "flatten";
+    case "pool":
+      return l.global
+        ? `pool global ${l.mode}`
+        : `pool ${l.mode} ${l.size ?? 2}`;
     case "attention":
       return `attn d${l.dModel}`;
     case "transformer_block":
@@ -96,8 +100,11 @@ export function NetworkVisualizer() {
         layerSizes.push(Math.min(first.inputDim, 12));
         labels.push(`input ${first.inputDim}`);
       } else if (first?.type === "conv2d") {
-        layerSizes.push(4);
-        labels.push("input 4×4");
+        // Read the real input shape rather than assuming 4×4 — shifted_bars is 8×8.
+        const ih = first.inputHeight ?? 4;
+        const iw = first.inputWidth ?? 4;
+        layerSizes.push(Math.min(ih, 8));
+        labels.push(`input ${ih}×${iw}`);
       } else if (
         first?.type === "attention" ||
         first?.type === "transformer_block"
@@ -112,9 +119,11 @@ export function NetworkVisualizer() {
       for (const l of layers) {
         if (l.type === "dense") layerSizes.push(Math.min(l.units, 12));
         else if (l.type === "conv2d") layerSizes.push(Math.min(l.filters, 8));
-        else if (l.type === "flatten")
+        else if (l.type === "flatten" || l.type === "pool")
           layerSizes.push(layerSizes[layerSizes.length - 1] ?? 4);
-        else layerSizes.push(Math.min(l.dModel, 8));
+        else if (l.type === "attention" || l.type === "transformer_block")
+          layerSizes.push(Math.min(l.dModel, 8));
+        else layerSizes.push(4);
         labels.push(layerLabel(l));
       }
 

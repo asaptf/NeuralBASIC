@@ -10,6 +10,7 @@ import {
   type Conv2dLayerState,
   type DenseLayerState,
   type Model,
+  type PoolLayerState,
 } from "./model";
 import {
   resolveValRatio,
@@ -203,6 +204,73 @@ function backwardConv(
 }
 
 /**
+ * Analytical pool backward. Max routes gradient to the argmax cell;
+ * avg spreads it evenly over the window (clamped to input bounds).
+ * No learnable parameters.
+ */
+function backwardPool(
+  layer: PoolLayerState,
+  deltaOut: number[][][]
+): number[][][] | null {
+  if (!layer.lastInput || !layer.lastOut) return null;
+
+  const input = layer.lastInput;
+  const c = input.length;
+  const h = input[0]!.length;
+  const w = input[0]![0]!.length;
+  const outH = layer.lastOut[0]!.length;
+  const outW = layer.lastOut[0]![0]!.length;
+  const size = layer.global ? Math.max(h, w, 1) : layer.size;
+  const stride = layer.global ? Math.max(h, w, 1) : layer.stride;
+
+  const dInput: number[][][] = [];
+  for (let ch = 0; ch < c; ch++) {
+    dInput.push(
+      Array.from({ length: h }, () => Array.from({ length: w }, () => 0))
+    );
+  }
+
+  if (layer.mode === "max") {
+    const maxY = layer.lastMaxY;
+    const maxX = layer.lastMaxX;
+    if (!maxY || !maxX) return dInput;
+    for (let ch = 0; ch < c; ch++) {
+      for (let oy = 0; oy < outH; oy++) {
+        for (let ox = 0; ox < outW; ox++) {
+          const g = deltaOut[ch]?.[oy]?.[ox] ?? 0;
+          const iy = maxY[ch]![oy]![ox]!;
+          const ix = maxX[ch]![oy]![ox]!;
+          if (iy >= 0 && iy < h && ix >= 0 && ix < w) {
+            dInput[ch]![iy]![ix]! += g;
+          }
+        }
+      }
+    }
+  } else {
+    for (let ch = 0; ch < c; ch++) {
+      for (let oy = 0; oy < outH; oy++) {
+        for (let ox = 0; ox < outW; ox++) {
+          const g = deltaOut[ch]?.[oy]?.[ox] ?? 0;
+          const y0 = oy * stride;
+          const x0 = ox * stride;
+          const y1 = Math.min(h, y0 + size);
+          const x1 = Math.min(w, x0 + size);
+          const n = Math.max(1, (y1 - y0) * (x1 - x0));
+          const share = g / n;
+          for (let y = y0; y < y1; y++) {
+            for (let x = x0; x < x1; x++) {
+              dInput[ch]![y]![x]! += share;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return dInput;
+}
+
+/**
  * Unified analytical step for dense and conv architectures.
  * Skips attention/transformer (returns false so caller can fall back).
  */
@@ -248,6 +316,19 @@ function trainStepAnalytical(
         deltaSpatial = reshapeCHW(deltaFlat, c!, h!, w!);
         deltaFlat = null;
       }
+    } else if (layer.type === "pool") {
+      if (!deltaSpatial) {
+        if (deltaFlat && layer.lastOut) {
+          const c = layer.lastOut.length;
+          const h = layer.lastOut[0]!.length;
+          const w = layer.lastOut[0]![0]!.length;
+          deltaSpatial = reshapeCHW(deltaFlat, c, h, w);
+          deltaFlat = null;
+        } else break;
+      }
+      const dIn = backwardPool(layer, deltaSpatial);
+      deltaSpatial = dIn;
+      deltaFlat = null;
     } else if (layer.type === "conv2d") {
       if (!deltaSpatial) {
         if (deltaFlat && layer.lastOut) {

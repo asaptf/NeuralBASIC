@@ -266,9 +266,18 @@ train dataset=tiny_images lr=0.12 epochs=100
         epochsCap: 100,
       };
     case "ch4-c3":
+      // The ch4 starter now uses `pool` (the configuration that works), so this
+      // gate's `flatten` requirement needs its own explicit solution.
       return {
         label: "conv + flatten + dense on tiny_images",
-        dsl: starter.replace(/dataset=\w+/, "dataset=tiny_images"),
+        dsl: `network FlattenPath {
+  conv2d filters=4 kernel=2 activation=relu channels=1 height=4 width=4
+  flatten
+  dense 8 activation=relu
+  dense 2 activation=sigmoid
+}
+train dataset=tiny_images lr=0.12 epochs=100
+`,
         attempts: 1,
         epochsCap: 30,
       };

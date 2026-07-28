@@ -47,6 +47,21 @@ export interface FlattenLayerState {
   lastOut?: number[];
 }
 
+export interface PoolLayerState {
+  type: "pool";
+  mode: "max" | "avg";
+  /** Window side; for global pool this equals the input spatial size used at forward. */
+  size: number;
+  stride: number;
+  global: boolean;
+  lastInput?: number[][][]; // C,H,W
+  lastOut?: number[][][];
+  /** Argmax row per output cell [C][OH][OW] (max pool only). */
+  lastMaxY?: number[][][];
+  /** Argmax col per output cell [C][OH][OW] (max pool only). */
+  lastMaxX?: number[][][];
+}
+
 export interface AttentionLayerState {
   type: "attention";
   dModel: number;
@@ -74,6 +89,7 @@ export type LayerState =
   | DenseLayerState
   | Conv2dLayerState
   | FlattenLayerState
+  | PoolLayerState
   | AttentionLayerState
   | TransformerBlockState;
 
@@ -221,6 +237,27 @@ export function createModel(
       height = Math.max(1, height - lc.kernelSize + 1);
       width = Math.max(1, width - lc.kernelSize + 1);
       flatDim = channels * height * width;
+    } else if (lc.type === "pool") {
+      const global = lc.global === true;
+      const size = global ? 0 : (lc.size ?? 2);
+      const stride = global ? 1 : (lc.stride ?? size);
+      layers.push({
+        type: "pool",
+        mode: lc.mode,
+        size,
+        stride,
+        global,
+      });
+      if (global || size <= 0) {
+        height = 1;
+        width = 1;
+      } else {
+        // valid window: out = floor((in - size) / stride) + 1
+        height = Math.max(1, Math.floor((height - size) / stride) + 1);
+        width = Math.max(1, Math.floor((width - size) / stride) + 1);
+      }
+      flatDim = channels * height * width;
+      isSpatial = true;
     } else if (lc.type === "flatten") {
       layers.push({ type: "flatten" });
       isSpatial = false;
@@ -321,6 +358,105 @@ function forwardConv(layer: Conv2dLayerState, input: number[][][]): number[][][]
   }
   layer.lastPre = pre;
   layer.lastOut = out;
+  return out;
+}
+
+/**
+ * Spatial pooling (max or avg). Global mode collapses each channel to 1×1.
+ * Max stores argmax coords for the analytical backward pass.
+ */
+function forwardPool(
+  layer: PoolLayerState,
+  input: number[][][]
+): number[][][] {
+  layer.lastInput = input;
+  const c = input.length;
+  const h = input[0]!.length;
+  const w = input[0]![0]!.length;
+
+  const size = layer.global ? Math.max(h, w, 1) : layer.size;
+  const stride = layer.global ? Math.max(h, w, 1) : layer.stride;
+  // Keep runtime size in sync for global (window covers whole map).
+  if (layer.global) {
+    layer.size = size;
+    layer.stride = stride;
+  }
+
+  const outH = layer.global
+    ? 1
+    : Math.max(1, Math.floor((h - size) / stride) + 1);
+  const outW = layer.global
+    ? 1
+    : Math.max(1, Math.floor((w - size) / stride) + 1);
+
+  const out: number[][][] = [];
+  const maxY: number[][][] = [];
+  const maxX: number[][][] = [];
+  const isMax = layer.mode === "max";
+
+  for (let ch = 0; ch < c; ch++) {
+    const plane: number[][] = [];
+    const yPlane: number[][] = [];
+    const xPlane: number[][] = [];
+    for (let oy = 0; oy < outH; oy++) {
+      const row: number[] = [];
+      const yRow: number[] = [];
+      const xRow: number[] = [];
+      for (let ox = 0; ox < outW; ox++) {
+        const y0 = oy * stride;
+        const x0 = ox * stride;
+        // Clamp window to input bounds (handles global on non-square / edge).
+        const y1 = Math.min(h, y0 + size);
+        const x1 = Math.min(w, x0 + size);
+        if (isMax) {
+          let best = -Infinity;
+          let by = y0;
+          let bx = x0;
+          for (let y = y0; y < y1; y++) {
+            for (let x = x0; x < x1; x++) {
+              const v = input[ch]![y]![x]!;
+              if (v > best) {
+                best = v;
+                by = y;
+                bx = x;
+              }
+            }
+          }
+          if (!Number.isFinite(best)) best = 0;
+          row.push(best);
+          yRow.push(by);
+          xRow.push(bx);
+        } else {
+          let sum = 0;
+          let n = 0;
+          for (let y = y0; y < y1; y++) {
+            for (let x = x0; x < x1; x++) {
+              sum += input[ch]![y]![x]!;
+              n++;
+            }
+          }
+          row.push(n > 0 ? sum / n : 0);
+          yRow.push(y0);
+          xRow.push(x0);
+        }
+      }
+      plane.push(row);
+      yPlane.push(yRow);
+      xPlane.push(xRow);
+    }
+    out.push(plane);
+    maxY.push(yPlane);
+    maxX.push(xPlane);
+  }
+
+  layer.lastOut = out;
+  if (isMax) {
+    layer.lastMaxY = maxY;
+    layer.lastMaxX = maxX;
+  } else {
+    layer.lastMaxY = undefined;
+    layer.lastMaxX = undefined;
+  }
   return out;
 }
 
@@ -489,6 +625,14 @@ export function forward(model: Model, input: number[]): ForwardCache {
       }
       spatial = forwardConv(layer, spatial);
       flat = flattenCHW(spatial);
+    } else if (layer.type === "pool") {
+      if (!spatial) {
+        // Infer square spatial layout from flat length (channel count unknown → 1).
+        const side = Math.round(Math.sqrt(flat.length));
+        spatial = reshapeCHW(flat, 1, side, side);
+      }
+      spatial = forwardPool(layer, spatial);
+      flat = flattenCHW(spatial);
     } else if (layer.type === "flatten") {
       if (spatial) {
         layer.lastShape = [
@@ -570,6 +714,19 @@ export function snapshotLayers(model: Model): LayerSnapshot[] {
         shape: layer.lastShape,
       };
     }
+    if (layer.type === "pool") {
+      return {
+        type: "pool",
+        activations: layer.lastOut ? flattenCHW(layer.lastOut) : undefined,
+        shape: layer.lastOut
+          ? [
+              layer.lastOut.length,
+              layer.lastOut[0]!.length,
+              layer.lastOut[0]![0]!.length,
+            ]
+          : undefined,
+      };
+    }
     if (layer.type === "attention") {
       return {
         type: "attention",
@@ -608,6 +765,8 @@ export function exportWeights(model: Model): LayerWeights[] {
       });
     } else if (layer.type === "flatten") {
       out.push({ type: "flatten" });
+    } else if (layer.type === "pool") {
+      out.push({ type: "pool" });
     } else if (layer.type === "attention") {
       const params: Record<string, number[][]> = {
         Wq: layer.Wq.map((r) => r.slice()),
