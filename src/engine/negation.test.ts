@@ -274,8 +274,7 @@ train dataset=negation lr=0.1 epochs=150
       // FD training is noisy; mean should clearly beat chance
       expect(mean(accs)).toBeGreaterThanOrEqual(0.75);
       expect(Math.max(...accs)).toBeGreaterThanOrEqual(0.9);
-    },
-    90_000
+    }
   );
 });
 
@@ -421,13 +420,23 @@ describe("attention vs dense on negation", () => {
       expect(bagMean).toBeLessThanOrEqual(LINEAR_BAG_CEILING + 1e-9);
       expect(bagMean).toBeLessThan(0.9);
       expect(Math.max(...bagAcc)).toBeLessThanOrEqual(LINEAR_BAG_CEILING + 1e-9);
-    },
-    180_000
+    }
   );
 
   it(
     "trained attention map is seq×seq and measurably non-uniform",
     () => {
+      // Aggregate across independent trainings — do NOT simplify back to a
+      // single-run threshold on globalMax. That peak is a stochastic quantity
+      // over a soft attention matrix: a CI flake saw 0.295 against
+      // uniform+0.05=0.30. A 30-run single-train probe of models with
+      // full-train acc ≥ 0.85 gave globalMax mean≈0.81, min≈0.26, max≈0.996
+      // (26/27 cleared 0.30; one solved the task with a nearly flat head-0
+      // map). Assert the mean of that distribution, not one draw
+      // (CONTRIBUTING.md: aggregates across runs).
+      const ATTEMPTS = 12;
+      const MIN_GOOD = 6;
+      const EPOCHS = 200;
       const samples = getDataset("negation").samples;
       const config: NetworkConfig = {
         layers: [
@@ -436,21 +445,6 @@ describe("attention vs dense on negation", () => {
         ],
       };
 
-      // Find a well-trained run
-      let best: Model | null = null;
-      let bestAcc = 0;
-      for (let r = 0; r < 12; r++) {
-        const m = trainOnSamples(config, samples, 0.1, 200, FLAT);
-        const a = accuracyOn(m, samples);
-        if (a > bestAcc) {
-          bestAcc = a;
-          best = m;
-        }
-        if (bestAcc >= 0.95) break;
-      }
-      expect(best).not.toBeNull();
-      expect(bestAcc).toBeGreaterThanOrEqual(0.85);
-
       // Probe sequences that readers will see in the heatmap
       const probes = samples.filter((s) => {
         const ids = decodeIds(s.x);
@@ -458,74 +452,126 @@ describe("attention vs dense on negation", () => {
         return ids[0] !== 0 || ids[1] !== 0;
       });
       expect(probes.length).toBeGreaterThan(0);
+      const probeSlice = probes.slice(0, 8);
 
       const uniform = 1 / SEQ;
-      const maps: { ids: string[]; pred: number; head0: number[][] }[] = [];
-      let globalMax = 0;
-      let globalMin = 1;
-      // Frobenius distance from the uniform matrix (seq×seq of 1/seq)
-      let totalUniformL1 = 0;
-      let nMaps = 0;
+      const runMaxes: number[] = [];
+      const runRanges: number[] = [];
+      const runL1s: number[] = [];
+      const allAccs: number[] = [];
+      let best: Model | null = null;
+      let bestAcc = 0;
+      // One dump of maps from the best run (for humans reading the suite log)
+      let dumpMaps: { ids: string[]; pred: number; head0: number[][] }[] = [];
 
-      const probeSlice = probes.slice(0, 8);
-      for (const s of probeSlice) {
-        forward(best!, s.x);
-        const layer = best!.layers[0]!;
-        expect(layer.type).toBe("attention");
-        if (layer.type !== "attention" || !layer.lastAttn) continue;
-        const head0 = layer.lastAttn[0]!;
-        expect(head0.length).toBe(SEQ);
-        expect(head0[0]!.length).toBe(SEQ);
+      for (let r = 0; r < ATTEMPTS; r++) {
+        const model = trainOnSamples(config, samples, 0.1, EPOCHS, FLAT);
+        const acc = accuracyOn(model, samples);
+        allAccs.push(acc);
 
-        // Rows are distributions
-        for (const row of head0) {
-          const sum = row.reduce((a, b) => a + b, 0);
-          expect(sum).toBeCloseTo(1, 5);
-        }
+        let globalMax = 0;
+        let globalMin = 1;
+        let totalUniformL1 = 0;
+        let nMaps = 0;
+        const mapsThisRun: typeof dumpMaps = [];
 
-        let mapL1 = 0;
-        for (const row of head0) {
-          for (const p of row) {
-            globalMax = Math.max(globalMax, p);
-            globalMin = Math.min(globalMin, p);
-            mapL1 += Math.abs(p - uniform);
+        for (const s of probeSlice) {
+          forward(model, s.x);
+          const layer = model.layers[0]!;
+          expect(layer.type).toBe("attention");
+          if (layer.type !== "attention" || !layer.lastAttn) continue;
+          const head0 = layer.lastAttn[0]!;
+          // Genuine seq×seq (not 1×1 decoration) — deterministic shape check
+          expect(head0.length).toBe(SEQ);
+          expect(head0[0]!.length).toBe(SEQ);
+
+          // Rows are distributions
+          for (const row of head0) {
+            const sum = row.reduce((a, b) => a + b, 0);
+            expect(sum).toBeCloseTo(1, 5);
           }
-        }
-        totalUniformL1 += mapL1;
-        nMaps++;
 
-        maps.push({
-          ids: decodeIds(s.x).map((i) => NEGATION_VOCAB[i]!),
-          pred: predict(best!, s.x)[0]!,
-          head0: head0.map((r) => r.map((v) => +v.toFixed(3))),
-        });
+          let mapL1 = 0;
+          for (const row of head0) {
+            for (const p of row) {
+              globalMax = Math.max(globalMax, p);
+              globalMin = Math.min(globalMin, p);
+              mapL1 += Math.abs(p - uniform);
+            }
+          }
+          totalUniformL1 += mapL1;
+          nMaps++;
+
+          mapsThisRun.push({
+            ids: decodeIds(s.x).map((i) => NEGATION_VOCAB[i]!),
+            pred: predict(model, s.x)[0]!,
+            head0: head0.map((row) => row.map((v) => +v.toFixed(3))),
+          });
+        }
+
+        // Only well-trained runs enter the non-uniformity aggregate — a failed
+        // init is not a counterexample to "trained maps are readable".
+        if (acc >= 0.85) {
+          runMaxes.push(globalMax);
+          runRanges.push(globalMax - globalMin);
+          runL1s.push(totalUniformL1 / Math.max(1, nMaps));
+        }
+
+        if (acc > bestAcc) {
+          bestAcc = acc;
+          best = model;
+          dumpMaps = mapsThisRun;
+        }
       }
 
-      const meanL1FromUniform = totalUniformL1 / Math.max(1, nMaps);
+      expect(best).not.toBeNull();
+      expect(bestAcc).toBeGreaterThanOrEqual(0.85);
+      // Enough successful trainings to estimate the map distribution
+      expect(runMaxes.length).toBeGreaterThanOrEqual(MIN_GOOD);
+
+      const meanMax = mean(runMaxes);
+      const meanRange = mean(runRanges);
+      const meanL1 = mean(runL1s);
+      const clearMargin = runMaxes.filter((m) => m > uniform + 0.05).length;
       console.log(
         "[negation trained attention maps]",
         JSON.stringify(
           {
-            fullTrainAcc: bestAcc,
-            globalMax: +globalMax.toFixed(3),
-            globalMin: +globalMin.toFixed(3),
-            meanL1FromUniform: +meanL1FromUniform.toFixed(3),
-            maps,
+            ATTEMPTS,
+            goodRuns: runMaxes.length,
+            fullTrainAccMean: +mean(allAccs).toFixed(3),
+            bestAcc: +bestAcc.toFixed(3),
+            globalMax: {
+              mean: +meanMax.toFixed(3),
+              min: +Math.min(...runMaxes).toFixed(3),
+              max: +Math.max(...runMaxes).toFixed(3),
+              clearUniformPlus05: clearMargin,
+              perRun: runMaxes.map((x) => +x.toFixed(3)),
+            },
+            rangeMean: +meanRange.toFixed(3),
+            meanL1FromUniform: +meanL1.toFixed(3),
+            maps: dumpMaps,
           },
           null,
           2
         )
       );
 
-      // Genuine seq×seq (not 1×1) already checked above. Non-uniformity:
-      // a perfectly flat map has L1=0 and max=min=1/seq. Trained runs
-      // consistently show max ≳ 0.30 and L1 ≳ 0.3 across the matrix
-      // (see measured maps in the suite header / console dump).
-      expect(globalMax).toBeGreaterThan(uniform + 0.05);
-      expect(globalMax - globalMin).toBeGreaterThan(0.08);
-      expect(meanL1FromUniform).toBeGreaterThan(0.2);
+      // Non-uniformity of the *distribution* of trained maps.
+      // Uniform baseline: max = min = 1/seq = 0.25, L1 = 0, range = 0.
+      // Thresholds sit well below measured means (max≈0.81, range≈0.7+, L1≈2+)
+      // but far above "decoration" — near-flat maps every run still fail.
+      // Do not replace these with a single-run `expect(globalMax) > …`.
+      expect(meanMax).toBeGreaterThan(uniform + 0.15); // mean max ≳ 0.40
+      expect(meanRange).toBeGreaterThan(0.15);
+      expect(meanL1).toBeGreaterThan(0.5);
+      // Majority of successful trainings clear the old single-run margin, so a
+      // rare flat head-0 solution cannot carry the mean alone.
+      expect(clearMargin).toBeGreaterThanOrEqual(
+        Math.ceil(runMaxes.length / 2)
+      );
 
-      // Behavioral check: GOOD alone vs NOT+GOOD (the chapter's promise)
+      // Behavioral check on the best-trained model: GOOD alone vs NOT+GOOD
       const goodAlone = samples.find((s) => {
         const ids = decodeIds(s.x);
         return (
@@ -561,7 +607,6 @@ describe("attention vs dense on negation", () => {
         for (let j = 0; j < SEQ; j++)
           diff += Math.abs(mapGood![i]![j]! - mapNotGood![i]![j]!);
       expect(diff).toBeGreaterThan(0.15);
-    },
-    120_000
+    }
   );
 });

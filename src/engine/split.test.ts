@@ -437,5 +437,5 @@ describe("overfitting signature (noisy_moons)", () => {
       bestFixVal,
       `L2 or small net must improve held-out vs unregularised high-cap.\n${summary}`
     ).toBeGreaterThan(meanVal + 0.03);
-  }, 180_000);
+  });
 });

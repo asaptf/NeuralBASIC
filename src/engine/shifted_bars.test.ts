@@ -228,8 +228,7 @@ train dataset=shifted_bars lr=0.2 epochs=150
       }
       expect(mean(accs)).toBeGreaterThanOrEqual(0.9);
       expect(Math.max(...accs)).toBeGreaterThanOrEqual(0.95);
-    },
-    60_000
+    }
   );
 });
 
@@ -357,7 +356,6 @@ describe("conv with pool vs dense on shifted_bars", () => {
       expect(cnnMean).toBeGreaterThan(d1Mean + 0.08);
       expect(cnnMean).toBeGreaterThan(d2Mean + 0.08);
       expect(cnnMean).toBeGreaterThanOrEqual(0.9);
-    },
-    180_000
+    }
   );
 });

@@ -1344,7 +1344,7 @@ For \`NOT GOOD PAD PAD\` \u2014 negated \u2014 the first row changes completely:
 
 Position 0 holds \`NOT\`, and it sends **98% of its attention to position 1**, which holds the word being negated. The model found the thing it needed to look at.
 
-Do treat this carefully. Attention maps are famously over-read: a bright cell shows where weight went, not *why*, and a model can reach the right answer with a map that looks arbitrary. Here the pattern is clear and reproducible, which makes it worth showing \u2014 but "the map explains the model" is a stronger claim than a heatmap can support.`,
+Do treat this carefully. Attention maps are famously over-read: a bright cell shows where weight went, not *why*, and a model can reach the right answer with a map that looks arbitrary. Here the pattern is usually strong enough to be worth showing \u2014 across thirty runs the brightest cell averaged around 0.79, against 0.25 for a flat map. But it is not guaranteed: in two of those thirty the map came out nearly uniform, and one of those two got every sentence right anyway. So train it more than once before you conclude anything from a single picture \u2014 and remember that "the map explains the model" is a stronger claim than a heatmap can support.`,
       },
       {
         heading: "Common traps",
