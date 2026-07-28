@@ -43,13 +43,42 @@ export interface Challenge {
   steps: ChallengeStep[];
 }
 
+/**
+ * A runnable example embedded in the lesson text.
+ *
+ * The point of teaching inside the app rather than in a PDF: an example the
+ * reader can put on screen in one click, in the same lab they're about to
+ * experiment in. Every one of these is covered by tests that actually run it,
+ * so the prose can't drift from what the code does.
+ */
+export interface LessonExample {
+  /** Button label — say what will happen, e.g. "Run AND on one neuron". */
+  label: string;
+  dsl: string;
+  /** What the reader should look for once it runs. */
+  expect: string;
+}
+
+export interface LessonSection {
+  heading: string;
+  /** Markdown: **bold**, *italic*, `code`, bullet lists, formula lines. */
+  body: string;
+  example?: LessonExample;
+}
+
 export interface Chapter {
   id: string;
   number: number;
   title: string;
   subtitle: string;
   goals: string[];
+  /** One-paragraph summary for the sidebar. The lesson is the long form. */
   theory: string;
+  /**
+   * The chapter's actual teaching text, read in the lesson view. Optional so
+   * chapters can be written one at a time; the sidebar falls back to `theory`.
+   */
+  lesson?: LessonSection[];
   starterDSL: string;
   challenges: Challenge[];
   /** Chapter unlock requires previous chapter challenges complete. */

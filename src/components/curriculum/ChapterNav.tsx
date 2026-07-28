@@ -15,6 +15,7 @@ export function ChapterNav() {
   const submitExplain = useAppStore((s) => s.submitExplain);
   const trainNow = useAppStore((s) => s.trainNow);
   const feedback = useAppStore((s) => s.challengeFeedback);
+  const setLessonOpen = useAppStore((s) => s.setLessonOpen);
 
   const chapter = CHAPTERS.find((c) => c.id === progress.currentChapterId);
 
@@ -57,6 +58,16 @@ export function ChapterNav() {
             Ch {chapter.number}: {chapter.title}
           </h2>
           <p className="mt-1 text-xs opacity-70">{chapter.subtitle}</p>
+
+          <button
+            type="button"
+            className="btn btn-primary read-lesson"
+            data-testid="btn-read-lesson"
+            onClick={() => setLessonOpen(true)}
+          >
+            Read the lesson
+            {chapter.lesson ? ` · ${chapter.lesson.length} sections` : ""}
+          </button>
 
           <Markdown text={chapter.theory} className="mt-3 opacity-95" />
 

@@ -98,6 +98,10 @@ interface AppState {
   setDataset: (d: TrainConfig["dataset"]) => void;
   parseAndApplyDsl: () => boolean;
   clearActionError: () => void;
+  /** Load a lesson's runnable example into the editor and train it. */
+  runExample: (dsl: string) => void;
+  lessonOpen: boolean;
+  setLessonOpen: (open: boolean) => void;
   trainNow: (reason?: string) => void;
   pauseTraining: () => void;
   resumeTraining: () => void;
@@ -457,6 +461,7 @@ export const useAppStore = create<AppState>((set, get) => {
     ],
     activeChallengeId: null,
     challengeFeedback: {},
+    lessonOpen: false,
     lastTrigger: null,
 
     setTheme: (t) => {
@@ -507,6 +512,31 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     clearActionError: () => set({ actionError: null }),
+
+    /**
+     * The lesson's examples are the reason to teach inside the app: one click
+     * puts the described network on screen in the same lab the reader is about
+     * to experiment in.
+     */
+    runExample: (dsl) => {
+      cancelLoop();
+      session = null;
+      set({
+        dsl,
+        weights: [],
+        history: { losses: [], accuracies: [] },
+        lastSnapshot: null,
+        isTraining: false,
+        isPaused: false,
+        epochsRun: 0,
+        totalEpochs: 0,
+        parseError: null,
+        actionError: null,
+      });
+      get().trainNow("lesson-example");
+    },
+
+    setLessonOpen: (open) => set({ lessonOpen: open }),
 
     trainNow: (reason = "manual") => {
       cancelLoop();

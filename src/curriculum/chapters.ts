@@ -29,6 +29,112 @@ AND and OR are linearly separable — the neuron can succeed.
 
 **Immediate Mode tip:** change \`lr\` or \`epochs\` and train again.
 Watch the loss curve and the glowing neuron activations.`,
+    lesson: [
+      {
+        heading: "One neuron is a scorer with a threshold",
+        body: `A neuron does two things, and it helps to keep them separate in your head.
+
+First it computes a **score** — one number — by weighting each input and adding an offset:
+
+score = w₁x₁ + w₂x₂ + b
+
+Then it squashes that score into a confidence between 0 and 1 with the **sigmoid**, σ. A large positive score becomes close to 1, a large negative score close to 0, and a score of exactly 0 becomes 0.5 — dead undecided.
+
+So the weights decide *how much each input matters and in which direction*, and the bias \`b\` decides *how eager the neuron is to fire at all*. The sigmoid only converts a score to a confidence; it does no deciding of its own.`,
+      },
+      {
+        heading: "Why the boundary is a straight line",
+        body: `The neuron answers "class 1" when its confidence passes 0.5 — which happens exactly when the score passes 0. So the frontier between its two answers is the set of points where
+
+w₁x₁ + w₂x₂ + b = 0
+
+That is the equation of a **straight line**. Not a metaphor: it is literally a line, and it's the line you see in the Data Lab.
+
+Two consequences worth holding on to:
+
+- The weights set the line's **orientation**; the bias slides it back and forth. Without a bias, the line would be nailed to the origin.
+- One neuron gets **one** line. Everything it can ever learn is "which side of this line are you on?"`,
+        example: {
+          label: "Run AND on one neuron",
+          dsl: `network Perceptron {
+  dense 2 -> 1 activation=sigmoid
+}
+train dataset=and lr=0.8 epochs=200`,
+          expect:
+            "AND reaches 100% and the summary says all 4 points are on the correct side. One line is enough: only (1,1) needs separating from the other three.",
+        },
+      },
+      {
+        heading: "What the loss number actually is",
+        body: `The **Loss** card is not "how many did it get wrong". It is **binary cross-entropy**: the average penalty for being confidently wrong.
+
+Cross-entropy punishes confidence, not just error. Predicting 0.51 for a class-0 point is a small mistake. Predicting 0.99 for the same point is a big one, even though both are "wrong" by the same accuracy count. That's deliberate — it's what pushes the neuron to become *decisive* rather than merely correct-by-a-hair.
+
+**Accuracy**, next to it, is the blunt count: what fraction of points land on the right side of 0.5. The two can move in opposite directions, and when they do it's informative — loss falling while accuracy sits still usually means the neuron is getting more confident about points it already had right.`,
+      },
+      {
+        heading: "How it learns, and when the curve gets jagged",
+        body: `Training here is **stochastic gradient descent**, one sample at a time. For each example the engine asks "which way should I nudge each weight to make *this* point's loss smaller?", takes a small step that way, and moves on. One **epoch** is one pass over the data.
+
+The loss is then re-measured over all the data at the end of each epoch — which explains a detail you'll notice immediately. On \`or\`, the curve slides down smoothly. On \`moons\` or \`xor\`, it's visibly jagged.
+
+The difference isn't difficulty as such, it's **agreement**. On \`or\` every sample wants the weights moved the same way, so the steps compound and the curve is clean. On \`moons\` the samples disagree: a step that helps one point hurts another, so the weights get tugged back and forth within a single epoch and the end-of-epoch measurement lands somewhere slightly different each time. Jaggedness is a picture of disagreement between your data points, not of the neuron being broken.`,
+      },
+      {
+        heading: "What a large learning rate really does",
+        body: `The **learning rate** is the size of each step. The usual warning is "too large and the loss will oscillate wildly" — so it's worth seeing what actually happens here, because it isn't quite that.
+
+Turn the learning rate up on \`moons\` and the curve does *not* get noticeably more jagged. What changes is the **height** of the loss: it multiplies several times over, while accuracy barely budges.
+
+Here's the mechanism. Big steps drive the weights to large magnitudes. Large weights mean large scores, and the sigmoid squashes large scores to almost exactly 0 or 1 — so the neuron stops hedging and becomes absolutely certain about everything. Cross-entropy charges enormously for confident mistakes, so the handful of points it still gets wrong now cost a fortune each.
+
+That's the real damage from too high a rate, and it's why you should watch **loss and accuracy together**. A model that is 82% right and screaming is in worse shape than one that is 85% right and hedging, even though the accuracy gap looks trivial.`,
+        example: {
+          label: "Compare lr=20 against lr=0.8 on moons",
+          dsl: `network Perceptron {
+  dense 2 -> 1 activation=sigmoid
+}
+train dataset=moons lr=20 epochs=200`,
+          expect:
+            "Accuracy lands near 82% — much like lr=0.8 — but the loss sits around 2.2 instead of 0.3, roughly seven times higher. Edit lr back to 0.8, train again, and watch the accuracy hold while the loss collapses.",
+        },
+      },
+      {
+        heading: "The XOR wall",
+        body: `Now the wall this chapter is really about. Plot XOR's four points and try to draw a single straight line with class 1 on one side and class 0 on the other:
+
+- (0,0) → 0 and (1,1) → 0 sit on opposite corners
+- (0,1) → 1 and (1,0) → 1 sit on the *other* opposite corners
+
+Each class occupies two diagonally opposite corners. No straight line separates a diagonal pair from the other diagonal pair. XOR is **not linearly separable**, and one neuron only ever gets one line.
+
+So the neuron doesn't fail because it's badly tuned, or because you were impatient with the epochs. It fails because you asked a question its shape cannot answer. Turning up \`lr\` or \`epochs\` cannot fix a geometry problem — a genuinely useful thing to recognise, because a lot of real debugging is telling this apart from bad tuning.`,
+        example: {
+          label: "Hit the wall on XOR",
+          dsl: `network Perceptron {
+  dense 2 -> 1 activation=sigmoid
+}
+train dataset=xor lr=0.8 epochs=400`,
+          expect:
+            "Accuracy lands anywhere from 25% to 75% depending on the random starting weights, and the Data Lab keeps ringing points no matter how long you train. Press Reset and Train a few times: the number moves, the wall doesn't.",
+        },
+      },
+      {
+        heading: "Common traps",
+        body: `- **"More epochs will fix it."** On AND, more epochs sharpens confidence. On XOR, more epochs changes nothing that matters — the ceiling is structural.
+- **"50% accuracy means it half-learned."** On a balanced two-class set, 50% is exactly what coin-flipping scores. That's the dashed *chance* line under the accuracy curve; below it, you're worse than guessing.
+- **"The line is the neuron."** The line is a *consequence* of the weights and bias. Change the numbers and the line moves; the neuron is the numbers.
+- **Reading a run as final.** Weights start random, so XOR can land at 25%, 50% or 75% on different runs. Press Reset and Train a few times before concluding anything from one number.`,
+      },
+      {
+        heading: "Where this goes next",
+        body: `You've found the exact limitation that motivated the next fifty years of the field. If one line is not enough, you need a way to **bend** the boundary.
+
+The fix turns out to be almost embarrassingly simple: put a layer of neurons *between* the input and the output, so the network can carve the space with several lines and then combine them. That combining step needs a nonlinearity — without one, stacked layers collapse back into a single line, which is a trap Chapter 2 makes you walk into on purpose.
+
+Finish this chapter's challenges and Chapter 2 opens.`,
+      },
+    ],
     starterDSL: defaultStarterDSL("ch1"),
     challenges: [
       {

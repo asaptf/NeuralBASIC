@@ -6,6 +6,7 @@ import { ImmediateControls } from "@/components/controls/ImmediateControls";
 import { CodeEditor } from "@/components/editor/CodeEditor";
 import { DataLab } from "@/components/lab/DataLab";
 import { Logo } from "@/components/ide/Logo";
+import { LessonView } from "@/components/curriculum/LessonView";
 import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { TutorPanel } from "@/components/tutor/TutorPanel";
 import { NetworkVisualizer } from "@/components/visualizer/NetworkVisualizer";
@@ -161,6 +162,8 @@ export function IdeShell() {
           <TutorPanel />
         </section>
       </main>
+
+      <LessonView />
 
       <footer className="ide-footer">
         <span>Ctrl/⌘+Enter = Train</span>
