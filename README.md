@@ -11,6 +11,7 @@ Users should feel the same joy of immediate experimentation that people felt wit
 - **Immediate Mode** — change architecture, learning rate, or data → instant visual + numerical feedback. No notebook-style “run cell”.
 - **Live visualization is the primary teacher** — the Data Lab (dataset scatter + decision boundary) is the largest panel on screen; glowing neurons, weights, loss curves and attention heatmaps sit alongside it.
 - **You watch it learn** — training advances epoch-by-epoch on an animation loop, with pause, `Step +1` and an epoch progress readout. Not a jump from “before” to “after”.
+- **A textbook, not captions** — each chapter opens a written lesson (~1,300 words, 7–8 sections) as a reading sheet over the workspace, because prose needs a 60–75 character measure that a 270px sidebar cannot give it. Every lesson carries runnable examples: one click loads the DSL, trains it, and drops you back in the lab with that network on screen.
 - **Progress gated by demonstrated understanding** — challenges + Socratic tutor checks. Explanations are graded across *distinct concepts*, so keyword stuffing does not unlock a chapter.
 - **Tablet-first** IDE with keyboard shortcuts (Ctrl/⌘+Enter to train).
 
@@ -97,9 +98,25 @@ network Perceptron {
 train dataset=xor lr=0.8 epochs=200
 ```
 
-Supported layers: `dense`, `conv2d`, `flatten`, `attention`, `transformer`.  
-Datasets: `xor`, `and`, `or`, `linear`, `moons`, `circles`, `spiral`, `tiny_images`, `tiny_text`.  
-Regularizer: `l2=0.01`.
+Supported layers: `dense`, `conv2d`, `pool`, `flatten`, `attention`, `transformer`.  
+Regularizer: `l2=0.01`. Held-out split: `val=0.3` on the train line (opt-in — it is a Chapter 3
+tool and must not silently withhold data from earlier lessons).
+
+Datasets, grouped by what they exist to teach:
+
+| Dataset | Shape | Why it's here |
+|---------|-------|---------------|
+| `xor`, `and`, `or` | 4 points | Linear separability, and the wall XOR puts up |
+| `linear`, `moons`, `circles`, `spiral` | 2-D scatter | Boundaries a single line can and cannot draw |
+| `noisy_moons` | 2-D, labels flipped | The only 2-D set that **can** overfit — the clean ones are dense and smooth enough that memorising them also generalises, so a 32×32 net scores 100% on both train and held-out |
+| `tiny_images` | 4×4 | Arrangement over intensity: both classes light exactly four pixels |
+| `shifted_bars` | 8×8, motif at many positions | Where weight sharing finally pays — 50 conv parameters beat 2,642 dense ones on held-out data |
+| `negation` | 4 tokens × 4 vocab | Order matters: `NOT GOOD` is negative, and no bag of words can tell it from `GOOD` |
+
+Several of these were added because a chapter could not otherwise demonstrate its own subject. That
+is worth stating plainly: three of the five chapters were blocked at some point by the app being
+unable to produce the phenomenon they describe, and the fix was engine and data work rather than
+prose.
 
 **The parser rejects what it doesn't understand**, and says where:
 
@@ -117,22 +134,37 @@ observation. Errors surface in a strip under the editor and name the valid alter
 
 ## Curriculum
 
-| # | Chapter | Focus |
-|---|---------|--------|
-| 1 | Single Neuron / Perceptron | Linear boundaries, AND/OR vs XOR |
-| 2 | MLP + activations | Hidden layers, solve XOR, moons/circles |
-| 3 | Overfitting & regularization | Capacity, L2, failure modes |
-| 4 | Convolutional basics | Kernels on 4×4 bar patterns |
-| 5 | Attention + tiny Transformer | Softmax attention, heatmaps, tiny text |
+Five chapters, each a written lesson of roughly 1,300 words opened from the sidebar, plus 2–3
+challenges with **predict → experiment → explain** steps. Later chapters unlock when the previous
+chapter's challenges are completed.
 
-Each chapter has **2–3 challenges** with **predict → experiment → explain** steps. Later chapters unlock when the previous chapter’s challenges are completed.
+| # | Chapter | The limitation it turns on |
+|---|---------|----------------------------|
+| 1 | Single Neuron / Perceptron | One neuron draws one line, so XOR is out of reach — a geometry problem no amount of tuning fixes |
+| 2 | MLP + activations | Stacked linear layers collapse into a single line; and two hidden units *can* represent XOR while solving it only 15% of the time |
+| 3 | Overfitting & regularization | A perfect training score is compatible with 63% on held-out data — you cannot detect this without holding data back |
+| 4 | Convolutional basics | A linear readout provably cannot tell a vertical bar from a horizontal one; and convolution only pays with a readout that discards position |
+| 5 | Attention + tiny Transformer | A bag of words cannot see negation, and a model that lacks the structure fails *below chance* rather than at it |
 
-Because a locked chapter hides its own bugs until a learner has already earned their way in, the
-curriculum is covered by tests rather than by clicking: `src/curriculum/curriculum.completeness.test.ts`
-proves — for all five chapters — that every starter program trains, every experiment gate is
-actually winnable, every `explain` step accepts a genuine answer and rejects keyword stuffing, and
-that the unlock chain can reach Chapter 5. Gate evaluation lives in `src/curriculum/gates.ts` and is
-shared by the store and those tests, so progression can't drift from what the tests assert.
+### Every number in the lessons is tested
+
+The lessons quote measured figures, and prose about a live system goes stale silently. So
+`src/curriculum/lesson.test.ts` parses the numeric claims out of each example's `expect` text and
+checks them against distributions measured over repeated runs. Editing "82%" to "95%" fails the suite.
+
+This caught real errors while the chapters were being written. One draft claimed a high learning rate
+makes the loss curve "turn violent" on `or`; measured over three runs per case, `or` at lr=20 and even
+lr=50 is perfectly smooth and converges to loss ≈ 0. Another quoted ReLU and tanh as tied at 88% from
+an eight-run sample; at sixty runs the real figures are sigmoid 97%, tanh 93%, ReLU 78% — every number
+wrong and the ordering wrong too. Chapter 2 now says so, because small samples of a random process are
+how confident false beliefs get made.
+
+A locked chapter hides its own bugs until a learner has already earned their way in, so the curriculum
+is covered by tests rather than by clicking. `src/curriculum/curriculum.completeness.test.ts` proves —
+for all five chapters — that every starter program trains, every experiment gate is actually winnable,
+every `explain` step accepts a genuine answer and rejects keyword stuffing, and that the unlock chain
+can reach Chapter 5. Gate evaluation lives in `src/curriculum/gates.ts` and is shared by the store and
+those tests, so progression can't drift from what the tests assert.
 
 ---
 
