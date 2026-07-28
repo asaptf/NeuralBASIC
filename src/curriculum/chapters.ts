@@ -1386,9 +1386,15 @@ The lab is still here. Every dataset, every layer, every knob \u2014 go and brea
           {
             kind: "experiment",
             prompt:
-              "Train a transformer (or attention) model on tiny_text, accuracy ≥ 0.7.",
+              "Train a transformer on `negation` — `transformer d_model=4 heads=2`, then a dense output — and reach accuracy ≥ 0.6. Bare `attention` will not satisfy this one; the gate wants the block. If you land at chance, retrain: this architecture is bimodal here, and lr=0.05 clears the bar far more often than lr=0.1.",
             experimentCheck: {
-              minAccuracy: 0.7,
+              // Transformer on negation is bimodal under this engine (finite-diff
+              // attention): a run either clears ~0.75+ or lands near chance (~0.5).
+              // More epochs make the left tail worse, not better. Gate at 0.6 —
+              // above chance / untrained mass, below the learning floor — so a
+              // correct transformer that actually fitted is not refused for
+              // sitting at 0.69. (dslIncludes still requires the transformer.)
+              minAccuracy: 0.6,
               dataset: "negation",
               dslIncludes: ["transformer"],
             },
@@ -1445,7 +1451,7 @@ The lab is still here. Every dataset, every layer, every knob \u2014 go and brea
           },
           {
             kind: "experiment",
-            prompt: "Train with heads=2 (transformer) on tiny_text.",
+            prompt: "Train with `heads=2` on `negation`, keeping `d_model=4` so the four tokens stay whole.",
             experimentCheck: {
               dataset: "negation",
               dslIncludes: ["transformer", "heads"],
@@ -1503,7 +1509,7 @@ The lab is still here. Every dataset, every layer, every knob \u2014 go and brea
           },
           {
             kind: "experiment",
-            prompt: "Train either transformer or dense on tiny_text; accuracy ≥ 0.8.",
+            prompt: "Train either a transformer or a plain dense net on `negation`; accuracy ≥ 0.8. Dense will get there easily — that is the point of the comparison that follows.",
             experimentCheck: {
               minAccuracy: 0.8,
               dataset: "negation",
