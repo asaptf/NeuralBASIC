@@ -48,6 +48,7 @@ const DATASET_LIST = [
   "tiny_images",
   "tiny_text",
   "noisy_moons",
+  "shifted_bars",
 ] as const;
 
 const DATASETS = new Set<string>(DATASET_LIST);

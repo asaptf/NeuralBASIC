@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { getDataset } from "@/engine";
 import type { Sample, TrainStepResult } from "@/engine/types";
+import { ImageLab } from "@/components/lab/ImageLab";
 import { PanelState } from "@/components/ui/PanelState";
 import { useAppStore } from "@/store/useAppStore";
 
@@ -96,6 +97,15 @@ export function DataLab() {
   const summary = useMemo(() => {
     const ds = getDataset(dataset);
     if (!is2d(ds.samples)) {
+      if (ds.inputShape.length === 3) {
+        const [, h, w] = ds.inputShape;
+        const kernels = snapshot?.layerSnapshots?.find(
+          (l) => l.type === "conv2d"
+        )?.weights?.length;
+        return kernels
+          ? `${dataset}: ${h}×${w} images, showing ${kernels} learned ${kernels === 1 ? "kernel" : "kernels"}.`
+          : `${dataset}: ${h}×${w} images. Train a conv2d layer to see its kernels.`;
+      }
       return `${dataset}: not a 2-D dataset — see the network panel and metrics.`;
     }
     const total = ds.samples.length;
@@ -110,6 +120,8 @@ export function DataLab() {
   }, [dataset, snapshot]);
 
   const plottable = is2d(getDataset(dataset).samples);
+  // Image datasets get their own view rather than an apology for having no plane.
+  const isImageDataset = getDataset(dataset).inputShape.length === 3;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -321,11 +333,15 @@ export function DataLab() {
           aria-label={summary}
         />
         {!plottable ? (
-          <PanelState
-            title={`“${dataset}” has no 2-D plane to plot`}
-            hint="Its inputs aren't two features, so there's no boundary to draw. Watch the network panel and metrics instead."
-            testId="lab-state"
-          />
+          isImageDataset ? (
+            <ImageLab />
+          ) : (
+            <PanelState
+              title={`“${dataset}” has no 2-D plane to plot`}
+              hint="Its inputs aren't two features, so there's no boundary to draw. Watch the network panel and metrics instead."
+              testId="lab-state"
+            />
+          )
         ) : (
           !snapshot?.decisionGrid && (
             <PanelState

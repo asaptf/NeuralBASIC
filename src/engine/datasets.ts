@@ -152,25 +152,53 @@ function makeSpiral(n = 60): Dataset {
   };
 }
 
-/** 4×4 binary patterns — vertical vs horizontal bar (tiny image subset). */
+/**
+ * Deterministic unit noise in [-1, 1] from sample index + salt.
+ * Used so noisy_* / image datasets never call Math.random() and stay cache-stable.
+ */
+function detUnit(i: number, salt: number): number {
+  let h = Math.imul(i + 1, 2654435761) ^ Math.imul(salt, 1597334677);
+  h = Math.imul(h ^ (h >>> 16), 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 3266489917);
+  return ((h >>> 0) / 4294967296) * 2 - 1;
+}
+
+/** Map detUnit → [0, 1) for Bernoulli-style flips. */
+function detUnit01(i: number, salt: number): number {
+  return (detUnit(i, salt) + 1) / 2;
+}
+
+/**
+ * 4×4 binary patterns — vertical vs horizontal bar (tiny image subset).
+ * Clean bars are fixed; noisy variants use detUnit (no Math.random).
+ */
 function makeTinyImages(): Dataset {
   const samples: Sample[] = [];
+  let sampleIdx = 0;
   // Vertical bars class 0
   for (let col = 0; col < 4; col++) {
     const img = Array.from({ length: 16 }, () => 0);
     for (let row = 0; row < 4; row++) img[row * 4 + col] = 1;
     // slight noise variants
     samples.push({ x: img.slice(), y: [1, 0] });
-    const noisy = img.map((v) => (Math.random() < 0.1 ? 1 - v : v));
+    sampleIdx++;
+    const noisy = img.map((v, pi) =>
+      detUnit01(sampleIdx * 16 + pi, 31) < 0.1 ? 1 - v : v
+    );
     samples.push({ x: noisy, y: [1, 0] });
+    sampleIdx++;
   }
   // Horizontal bars class 1
   for (let row = 0; row < 4; row++) {
     const img = Array.from({ length: 16 }, () => 0);
     for (let col = 0; col < 4; col++) img[row * 4 + col] = 1;
     samples.push({ x: img.slice(), y: [0, 1] });
-    const noisy = img.map((v) => (Math.random() < 0.1 ? 1 - v : v));
+    sampleIdx++;
+    const noisy = img.map((v, pi) =>
+      detUnit01(sampleIdx * 16 + pi, 31) < 0.1 ? 1 - v : v
+    );
     samples.push({ x: noisy, y: [0, 1] });
+    sampleIdx++;
   }
   return {
     name: "tiny_images",
@@ -182,14 +210,61 @@ function makeTinyImages(): Dataset {
 }
 
 /**
- * Deterministic unit noise in [-1, 1] from sample index + salt.
- * Used so noisy_* datasets never call Math.random() and stay cache-stable.
+ * 8×8 images: a short vertical bar vs a short horizontal bar placed at many
+ * translations. Designed so weight sharing pays — there are far more positions
+ * than a parameter-matched dense net can specialise per location, while a
+ * small conv kernel learns the motif once.
+ *
+ * Clean patterns only (no positional jitter). Mild deterministic salt-and-pepper
+ * on a second copy of each placement so the set is not purely combinatorial.
+ *
+ * Layout (BAR_LEN=3 on 8×8):
+ *   vertical placements:   (8-3+1)×8 = 48
+ *   horizontal placements: 8×(8-3+1) = 48
+ *   ×2 (clean + noisy) → 192 samples, balanced 96/96.
+ *
+ * Fully deterministic (no Math.random).
  */
-function detUnit(i: number, salt: number): number {
-  let h = Math.imul(i + 1, 2654435761) ^ Math.imul(salt, 1597334677);
-  h = Math.imul(h ^ (h >>> 16), 2246822519);
-  h = Math.imul(h ^ (h >>> 13), 3266489917);
-  return ((h >>> 0) / 4294967296) * 2 - 1;
+function makeShiftedBars(size = 8, barLen = 3, noiseRate = 0.04): Dataset {
+  const samples: Sample[] = [];
+  let sampleIdx = 0;
+
+  const blank = (): number[] => Array.from({ length: size * size }, () => 0);
+
+  const addNoisy = (img: number[], y: number[]): void => {
+    samples.push({ x: img.slice(), y: y.slice() });
+    sampleIdx++;
+    const noisy = img.map((v, pi) =>
+      detUnit01(sampleIdx * size * size + pi, 47) < noiseRate ? 1 - v : v
+    );
+    samples.push({ x: noisy, y: y.slice() });
+    sampleIdx++;
+  };
+
+  // Class 0: vertical bar of length barLen
+  for (let r = 0; r <= size - barLen; r++) {
+    for (let c = 0; c < size; c++) {
+      const img = blank();
+      for (let k = 0; k < barLen; k++) img[(r + k) * size + c] = 1;
+      addNoisy(img, [1, 0]);
+    }
+  }
+  // Class 1: horizontal bar of length barLen
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c <= size - barLen; c++) {
+      const img = blank();
+      for (let k = 0; k < barLen; k++) img[r * size + (c + k)] = 1;
+      addNoisy(img, [0, 1]);
+    }
+  }
+
+  return {
+    name: "shifted_bars",
+    samples,
+    inputShape: [1, size, size], // C,H,W
+    outputDim: 2,
+    kind: "classification",
+  };
 }
 
 /**
@@ -341,6 +416,9 @@ export function getDataset(name: DatasetName, seedRefresh = false): Dataset {
     case "noisy_moons":
       ds = makeNoisyMoons();
       break;
+    case "shifted_bars":
+      ds = makeShiftedBars();
+      break;
     default:
       ds = makeXor();
   }
@@ -359,4 +437,5 @@ export const DATASET_NAMES: DatasetName[] = [
   "tiny_images",
   "tiny_text",
   "noisy_moons",
+  "shifted_bars",
 ];

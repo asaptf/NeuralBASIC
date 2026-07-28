@@ -72,7 +72,12 @@ export type DatasetName =
   | "tiny_images"
   | "tiny_text"
   /** Two moons + deterministic label noise — Chapter 3 overfitting demo. */
-  | "noisy_moons";
+  | "noisy_moons"
+  /**
+   * Short vertical vs horizontal bars at many 8×8 translations — Chapter 4
+   * demo where weight sharing beats a parameter-matched dense net.
+   */
+  | "shifted_bars";
 
 export interface Sample {
   x: number[];

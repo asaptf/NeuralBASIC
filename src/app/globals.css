@@ -1232,3 +1232,58 @@ html[data-theme="retro"] .panel-header {
 .chart-legend-dashed {
   border-top-style: dashed;
 }
+
+/* ─── Image lab ───
+   Shown in place of the scatter plot for image datasets, where the largest panel
+   on screen used to display only a notice that it had nothing to draw. */
+.image-lab {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  padding: var(--s-4);
+}
+
+.image-lab-heading {
+  margin: 0 0 var(--s-3);
+  font-size: var(--t-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+}
+
+.swatch-fig {
+  margin: 0;
+  text-align: center;
+}
+
+.swatch-fig figcaption {
+  margin-top: var(--s-1);
+  font-size: var(--t-micro);
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+
+.swatch {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.4);
+  background: color-mix(in srgb, var(--bg) 75%, transparent);
+}
+
+.image-lab-note {
+  margin: var(--s-3) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.5;
+  color: var(--text-dim);
+  max-width: 60ch;
+}
