@@ -1,7 +1,9 @@
 /**
- * The app mark: the same sigmoid as the favicon (`src/app/icon.svg`), but drawn
- * from theme tokens so Retro Blue gets its own colours instead of a hardcoded
- * mint tile. Keep the two in visual sync if either changes.
+ * The app mark: the same sigmoid as the favicon (`public/icon.svg`, with its
+ * raster siblings `favicon.ico` and `apple-icon.png` beside it), but drawn from
+ * theme tokens so Retro Blue gets its own colours instead of a hardcoded mint
+ * tile. The path below is duplicated in those files — keep all of them in visual
+ * sync if any changes.
  */
 export function Logo({ size = 22 }: { size?: number }) {
   return (
