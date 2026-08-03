@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getDataset } from "@/engine";
+import { createModelProbe, type ProbeResult } from "@/engine/probe";
 import type { Sample, TrainStepResult } from "@/engine/types";
 import { ImageLab } from "@/components/lab/ImageLab";
+import { PredictionReadout } from "@/components/lab/PredictionReadout";
 import { PanelState } from "@/components/ui/PanelState";
 import { useAppStore } from "@/store/useAppStore";
 
@@ -11,6 +13,10 @@ import { useAppStore } from "@/store/useAppStore";
  * The primary teaching surface: the dataset itself, with the model's decision
  * boundary underneath it. Seeing *which* points the network gets wrong is the
  * whole point — a boundary without the data on top teaches nothing.
+ *
+ * It is also where the learner tests the thing they trained. Everything else on
+ * screen is the model's opinion of the training set; tapping the plot hands it a
+ * point that was never in the data and reads the answer back.
  */
 
 interface Palette {
@@ -22,25 +28,67 @@ interface Palette {
   bg: string;
 }
 
-function paletteFor(theme: string): Palette {
-  if (theme === "retro") {
-    return {
-      class0: "#ff5555",
-      class1: "#55ff55",
-      wrong: "#ffff55",
-      axis: "#55ffff",
-      text: "#ffffff",
-      bg: "#000088",
-    };
-  }
-  return {
+/** Literals are the fallback only — the CSS variables below are the truth. */
+const FALLBACK: Record<string, Palette> = {
+  retro: {
+    class0: "#ff5555",
+    class1: "#55ff55",
+    wrong: "#ffff55",
+    axis: "#55ffff",
+    text: "#ffffff",
+    bg: "#000088",
+  },
+  modern: {
     class0: "#ff6b9d",
     class1: "#00ffc8",
     wrong: "#ffd166",
     axis: "rgba(255,255,255,0.22)",
     text: "#cfe8e0",
     bg: "#0a0e17",
+  },
+};
+
+/**
+ * Read the plot colours off the theme's CSS variables.
+ *
+ * The canvas and the prediction readout below it colour the same two classes,
+ * and a canvas that keeps its own copy of the palette drifts from the stylesheet
+ * the moment either is edited. Falls back to literals when there is no computed
+ * style to read (server render, tests).
+ */
+function paletteFor(theme: string, el: Element | null): Palette {
+  const fallback = FALLBACK[theme] ?? FALLBACK.modern!;
+  if (!el || typeof getComputedStyle !== "function") return fallback;
+  const cs = getComputedStyle(el);
+  const read = (name: string, fb: string) =>
+    cs.getPropertyValue(name).trim() || fb;
+  return {
+    class0: read("--class-0", fallback.class0),
+    class1: read("--class-1", fallback.class1),
+    wrong: read("--class-wrong", fallback.wrong),
+    axis: read("--plot-axis", fallback.axis),
+    text: read("--plot-text", fallback.text),
+    bg: read("--plot-bg", fallback.bg),
   };
+}
+
+/** A point the learner handed the model, and what came back. */
+interface ProbePoint {
+  x: number;
+  y: number;
+  result: ProbeResult;
+}
+
+/** Mapping between the plot's pixels and feature space, as last drawn. */
+interface PlotView {
+  padL: number;
+  padT: number;
+  plotW: number;
+  plotH: number;
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
 }
 
 function is2d(samples: Sample[]): boolean {
@@ -88,6 +136,67 @@ export function DataLab() {
   const snapshot = useAppStore((s) => s.lastSnapshot);
   const dataset = useAppStore((s) => s.trainConfig.dataset);
   const theme = useAppStore((s) => s.theme);
+  const network = useAppStore((s) => s.network);
+  const trainConfig = useAppStore((s) => s.trainConfig);
+  const weights = useAppStore((s) => s.weights);
+
+  // A live copy of the trained network, for inputs that were never in the data.
+  // Null until a run finishes — the store empties `weights` when one starts and
+  // fills them at the end — and null again if those weights describe no model
+  // this config can be rebuilt into.
+  const probe = useMemo(
+    () => createModelProbe(network, trainConfig, weights),
+    [network, trainConfig, weights]
+  );
+
+  const [probes, setProbes] = useState<ProbePoint[]>([]);
+  const [hovered, setHovered] = useState<ProbePoint | null>(null);
+  const viewRef = useRef<PlotView | null>(null);
+
+  // Answers from a model that no longer exists are worse than no answers: they
+  // sit on the plot looking current. Drop them whenever the model changes.
+  useEffect(() => {
+    setProbes([]);
+    setHovered(null);
+  }, [probe]);
+
+  /** Pixel position within the canvas → the feature-space point it stands for. */
+  const featureAt = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const view = viewRef.current;
+      const canvas = canvasRef.current;
+      if (!view || !canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
+      // Outside the plot frame there is no point being asked about.
+      if (
+        px < view.padL ||
+        px > view.padL + view.plotW ||
+        py < view.padT ||
+        py > view.padT + view.plotH
+      ) {
+        return null;
+      }
+      return {
+        x: view.xMin + ((px - view.padL) / view.plotW) * (view.xMax - view.xMin),
+        y:
+          view.yMin +
+          ((view.padT + view.plotH - py) / view.plotH) * (view.yMax - view.yMin),
+      };
+    },
+    []
+  );
+
+  const askAt = useCallback(
+    (clientX: number, clientY: number): ProbePoint | null => {
+      if (!probe) return null;
+      const at = featureAt(clientX, clientY);
+      if (!at) return null;
+      return { x: at.x, y: at.y, result: probe.run([at.x, at.y]) };
+    },
+    [probe, featureAt]
+  );
 
   /**
    * The canvas is invisible to screen readers, and "how many points is it still
@@ -123,6 +232,9 @@ export function DataLab() {
   // Image datasets get their own view rather than an apology for having no plane.
   const isImageDataset = getDataset(dataset).inputShape.length === 3;
 
+  /** Latest draw, so the resize observer can call it without being rebuilt. */
+  const drawRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
@@ -142,7 +254,7 @@ export function DataLab() {
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const p = paletteFor(theme);
+      const p = paletteFor(theme, wrap);
       ctx.fillStyle = p.bg;
       ctx.fillRect(0, 0, w, h);
 
@@ -150,7 +262,10 @@ export function DataLab() {
 
       // Non-2D datasets (images / text) have no meaningful scatter plane.
       // The explanation lives in the PanelState overlay, not in the bitmap.
-      if (!is2d(ds.samples)) return;
+      if (!is2d(ds.samples)) {
+        viewRef.current = null;
+        return;
+      }
 
       // Plot frame: prefer the grid's own bounds so boundary and points align.
       const grid = snapshot?.decisionGrid;
@@ -199,6 +314,11 @@ export function DataLab() {
       const sx = (x: number) => padL + ((x - xMin) / (xMax - xMin || 1)) * plotW;
       const sy = (y: number) =>
         padT + plotH - ((y - yMin) / (yMax - yMin || 1)) * plotH;
+
+      // Publish the frame so a tap can be turned back into a feature-space
+      // point. Inverting the mapping here rather than recomputing it in the
+      // handler is what keeps the marker under the finger that placed it.
+      viewRef.current = { padL, padT, plotW, plotH, xMin, xMax, yMin, yMax };
 
       // ── decision boundary ──
       // Drawn through sx/sy in the grid's OWN bounds: the displayed frame was
@@ -285,6 +405,47 @@ export function DataLab() {
         ctx.stroke();
       }
 
+      // ── the learner's own test points ──
+      // Diamonds, deliberately not circles: these are questions the learner
+      // asked, not data the network was trained on, and the plot must not blur
+      // the two. Opacity tracks confidence, so a marker sitting on the boundary
+      // looks as undecided as the model is.
+      const marker = (pt: ProbePoint, pinned: boolean) => {
+        const px = sx(pt.x);
+        const py = sy(pt.y);
+        const color = pt.result.classIndex === 1 ? p.class1 : p.class0;
+        const r = 7.5;
+
+        ctx.beginPath();
+        ctx.moveTo(px, py - r);
+        ctx.lineTo(px + r, py);
+        ctx.lineTo(px, py + r);
+        ctx.lineTo(px - r, py);
+        ctx.closePath();
+
+        ctx.globalAlpha = 0.25 + pt.result.confidence * 0.55;
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.lineWidth = pinned ? 2 : 1.5;
+        ctx.strokeStyle = color;
+        if (!pinned) ctx.setLineDash([3, 2]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (pinned) {
+          ctx.fillStyle = p.text;
+          ctx.globalAlpha = 0.85;
+          ctx.font = "10px ui-monospace, monospace";
+          ctx.fillText(pt.result.p1.toFixed(2), px + r + 3, py + 3.5);
+          ctx.globalAlpha = 1;
+        }
+      };
+
+      for (const pt of probes) marker(pt, true);
+      if (hovered) marker(hovered, false);
+
       // ── legend ──
       const ly = h - 14;
       const chip = (x: number, color: string, label: string, ring = false) => {
@@ -313,11 +474,19 @@ export function DataLab() {
       }
     };
 
+    drawRef.current = draw;
     draw();
-    const ro = new ResizeObserver(draw);
+  }, [snapshot, dataset, theme, probes, hovered]);
+
+  // Kept out of the draw effect on purpose: hovering the plot redraws on every
+  // pointer move, and rebuilding the observer at that rate would be pure waste.
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const ro = new ResizeObserver(() => drawRef.current());
     ro.observe(wrap);
     return () => ro.disconnect();
-  }, [snapshot, dataset, theme]);
+  }, []);
 
   return (
     <div className="panel flex h-full min-h-0 flex-col" data-testid="data-lab-panel">
@@ -328,9 +497,23 @@ export function DataLab() {
       <div ref={wrapRef} className="panel-body">
         <canvas
           ref={canvasRef}
-          className="block"
+          className={`block${probe && plottable ? " is-probeable" : ""}`}
           role="img"
           aria-label={summary}
+          // Hover previews the answer, a tap pins it. Touch fires both, which
+          // is the behaviour we want: the finger lands and the marker stays.
+          onPointerMove={
+            probe ? (e) => setHovered(askAt(e.clientX, e.clientY)) : undefined
+          }
+          onPointerLeave={probe ? () => setHovered(null) : undefined}
+          onPointerDown={
+            probe
+              ? (e) => {
+                  const pt = askAt(e.clientX, e.clientY);
+                  if (pt) setProbes((prev) => [...prev, pt]);
+                }
+              : undefined
+          }
         />
         {!plottable ? (
           isImageDataset ? (
@@ -357,6 +540,84 @@ export function DataLab() {
       >
         {summary}
       </p>
+      {plottable && (
+        <TestStrip
+          probe={probe != null}
+          trained={weights.length > 0}
+          shown={hovered ?? probes[probes.length - 1] ?? null}
+          pinnedCount={probes.length}
+          onClear={() => setProbes([])}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The "test it" strip under the plot.
+ *
+ * A trained network that is only ever shown answering its own training set
+ * teaches the wrong lesson — that accuracy is a property of the model rather
+ * than of the model *and* the inputs you try. This is where a learner finds out
+ * what happens between the clusters, or outside them.
+ */
+function TestStrip({
+  probe,
+  trained,
+  shown,
+  pinnedCount,
+  onClear,
+}: {
+  probe: boolean;
+  /** Whether a finished run left weights behind at all. */
+  trained: boolean;
+  shown: ProbePoint | null;
+  pinnedCount: number;
+  onClear: () => void;
+}) {
+  if (!probe) {
+    return (
+      <div className="lab-teststrip" data-testid="lab-teststrip">
+        <span className="lab-teststrip-hint">
+          {trained
+            ? // Weights exist but no model can be rebuilt from them. Saying
+              // "train it first" here would be a lie the learner can disprove
+              // by looking at the epoch counter.
+              "This run's weights don't fit the network in the editor, so there is nothing to test. Check the loss for NaN, then train again."
+            : "Train the network, then tap the plot to ask it about a point that was never in the data."}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="lab-teststrip" data-testid="lab-teststrip">
+      <div className="lab-teststrip-head">
+        <span className="lab-teststrip-title">Test it</span>
+        {pinnedCount > 0 && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-tiny"
+            data-testid="btn-clear-probes"
+            onClick={onClear}
+          >
+            Clear {pinnedCount}
+          </button>
+        )}
+      </div>
+      {shown ? (
+        <PredictionReadout
+          result={shown.result}
+          caption={`at (${shown.x.toFixed(2)}, ${shown.y.toFixed(2)})`}
+          testId="lab-probe-readout"
+        />
+      ) : (
+        <span className="lab-teststrip-hint">
+          Move over the plot for a live answer; tap to pin one. Walking a line
+          across the boundary is the fastest way to see where the network stops
+          being sure.
+        </span>
+      )}
     </div>
   );
 }

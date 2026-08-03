@@ -24,6 +24,7 @@ and predicts one class everywhere. That failure is the lesson, and it is reprodu
 - **Immediate Mode** — change architecture, learning rate, or data → instant visual + numerical feedback. No notebook-style “run cell”.
 - **Live visualization is the primary teacher** — the Data Lab (dataset scatter + decision boundary) is the largest panel on screen; glowing neurons, weights, loss curves and attention heatmaps sit alongside it.
 - **You watch it learn** — training advances epoch-by-epoch on an animation loop, with pause, `Step +1` and an epoch progress readout. Not a jump from “before” to “after”.
+- **Then you test it yourself** — every other number on screen is the model's opinion of the training set. Tap anywhere on the plot and it answers for a point that was never in the data, with a needle showing which side of the 0.5 threshold it landed on and how far. Image datasets get a grid you draw on instead: paint a bar, rub it out, paint the same bar in a corner, and watch a convolutional readout hold where a position-tied one falls apart.
 - **A textbook, not captions** — each chapter opens a written lesson (~1,300 words, 7–8 sections) as a reading sheet over the workspace, because prose needs a 60–75 character measure that a 270px sidebar cannot give it. Every lesson carries runnable examples: one click loads the DSL, trains it, and drops you back in the lab with that network on screen.
 - **Progress gated by demonstrated understanding** — challenges + Socratic tutor checks. Explanations are graded across *distinct concepts*, so keyword stuffing does not unlock a chapter.
 - **Tablet-first** IDE with keyboard shortcuts (Ctrl/⌘+Enter to train).
@@ -70,9 +71,10 @@ Leave `BASE_PATH` unset for local work so the app stays rooted at `/`.
 2. Chapter 1 starter is a single dense perceptron on XOR/AND.
 3. Press **Train ▶** (or Ctrl/⌘+Enter) — the boundary sweeps across the Data Lab as the loss curve fills in. Use **Pause** / **Step +1** to inspect a single epoch.
 4. Switch `dataset` between `and` and `xor`: AND ends at 0/4 misclassified, XOR sticks at 2/4 with the failing points ringed. That contrast *is* the lesson.
-5. Chat with the **Socratic Tutor** (ask for a full solution — it will refuse and redirect).
-6. Complete a challenge: predict → experiment → explain. A wrong prediction gets a nudge, not the answer; a hand-wavy explanation gets sent back.
-7. **Export Model** → JSON weights + PyTorch-equivalent snippet.
+5. Tap the plot to test the trained neuron on points that were never in the data — walk a line across the boundary and watch the readout cross 0.5.
+6. Chat with the **Socratic Tutor** (ask for a full solution — it will refuse and redirect).
+7. Complete a challenge: predict → experiment → explain. A wrong prediction gets a nudge, not the answer; a hand-wavy explanation gets sent back.
+8. **Export Model** → JSON weights + PyTorch-equivalent snippet.
 
 ---
 
@@ -98,7 +100,7 @@ Transparency for teaching: every weight, activation, and attention map is a plai
 
 ```
 src/
-  engine/           # DSL parser, datasets, layers, train, export
+  engine/           # DSL parser, datasets, layers, train, probe, export
   curriculum/       # 5 chapters + challenges (data-driven, concept-tagged)
   tutor/            # Socratic system prompt, mock replies, offline graders
   store/            # Zustand Immediate Mode store + animated training loop

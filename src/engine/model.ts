@@ -833,6 +833,17 @@ export function loadWeights(model: Model, weights: LayerWeights[]): void {
         layer.attention.Wo = w.params.Wo.map((r) => r.slice());
       if (w.params.W1) layer.W1 = w.params.W1.map((r) => r.slice());
       if (w.params.W2) layer.W2 = w.params.W2.map((r) => r.slice());
+      // exportWeights concatenates b1|b2 into `biases`; without this split a
+      // restored block runs with zero feed-forward biases and diverges from
+      // the model that was saved (Save/Load, snapshots, and the probe).
+      if (w.biases) {
+        const dff = layer.b1.length;
+        const dModel = layer.b2.length;
+        if (w.biases.length >= dff + dModel) {
+          layer.b1 = w.biases.slice(0, dff);
+          layer.b2 = w.biases.slice(dff, dff + dModel);
+        }
+      }
     }
   }
 }

@@ -34,6 +34,16 @@ html[data-theme="modern"],
   --series-acc: #a78bfa;
   --good: #35e5a4;
   --bad: #ff6b8a;
+
+  /* Data Lab plot. These are read by the canvas too (see paletteFor in
+     DataLab.tsx) so the bitmap and the prediction readout under it cannot
+     colour the same two classes differently. */
+  --class-0: #ff6b9d;
+  --class-1: #00ffc8;
+  --class-wrong: #ffd166;
+  --plot-axis: rgba(255, 255, 255, 0.22);
+  --plot-text: #cfe8e0;
+  --plot-bg: #0a0e17;
   color-scheme: dark;
 }
 
@@ -78,6 +88,12 @@ html[data-theme="retro"],
   --series-acc: #ff55ff;
   --good: #55ff55;
   --bad: #ff5555;
+  --class-0: #ff5555;
+  --class-1: #55ff55;
+  --class-wrong: #ffff55;
+  --plot-axis: #55ffff;
+  --plot-text: #ffffff;
+  --plot-bg: #000088;
   color-scheme: dark;
 }
 
@@ -245,6 +261,12 @@ html[data-theme="retro"] .logo-tile {
   border-color: transparent;
   background: color-mix(in srgb, var(--text) 10%, transparent);
   color: var(--text);
+}
+
+/* Sits inside a panel body next to content, not in a toolbar. */
+.btn-tiny {
+  padding: 0.15rem 0.4rem;
+  font-size: var(--t-micro);
 }
 
 /* Square variant for a button whose whole content is an icon. `.btn`'s padding
@@ -1313,4 +1335,230 @@ html[data-theme="retro"] .panel-header {
   line-height: 1.5;
   color: var(--text-dim);
   max-width: 60ch;
+}
+
+/* ─── Test it ───
+   Everywhere else the model is only shown answering its own training set. These
+   surfaces are where the learner hands it something it has never seen. */
+
+.lab-teststrip {
+  padding: var(--s-2) 0.65rem var(--s-3);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.lab-teststrip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.lab-teststrip-title {
+  font-size: var(--t-micro);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.lab-teststrip-hint {
+  font-size: var(--t-small);
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+/* The plot only accepts questions once there is a model to ask. */
+canvas.is-probeable {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.probe-readout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.probe-verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: var(--t-small);
+}
+
+.probe-chip {
+  padding: 0.05rem 0.4rem;
+  border-radius: calc(var(--radius) * 0.5);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  border: 1px solid currentColor;
+}
+
+.probe-chip-0 {
+  color: var(--class-0);
+  background: color-mix(in srgb, var(--class-0) 16%, transparent);
+}
+
+.probe-chip-1 {
+  color: var(--class-1);
+  background: color-mix(in srgb, var(--class-1) 16%, transparent);
+}
+
+.probe-confidence {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.probe-truth.good {
+  color: var(--good);
+}
+
+.probe-truth.bad {
+  color: var(--bad);
+}
+
+.probe-caption {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+/* Two tinted halves and a line down the middle: which side the needle lands on
+   is the decision, how far from the middle it lands is the conviction. */
+.probe-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--class-0) 34%, transparent),
+    color-mix(in srgb, var(--class-0) 8%, transparent) 49%,
+    color-mix(in srgb, var(--class-1) 8%, transparent) 51%,
+    color-mix(in srgb, var(--class-1) 34%, transparent)
+  );
+}
+
+.probe-bar-threshold {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: 50%;
+  width: 1px;
+  background: var(--text);
+  opacity: 0.55;
+}
+
+.probe-bar-needle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  transition: left 90ms linear;
+}
+
+.probe-needle-0 {
+  background: var(--class-0);
+}
+
+.probe-needle-1 {
+  background: var(--class-1);
+}
+
+.probe-bar-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .probe-bar-needle {
+    transition: none;
+  }
+}
+
+/* ─── Drawable input (image datasets) ─── */
+.draw-lab {
+  display: flex;
+  flex-direction: column;
+}
+
+.draw-lab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  align-items: flex-start;
+}
+
+.draw-grid {
+  display: grid;
+  gap: 1px;
+  width: 168px;
+  aspect-ratio: 1;
+  flex: none;
+  padding: 1px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.4);
+  background: var(--border);
+  /* The grid is painted by dragging, so the browser must not read a drag as
+     a scroll gesture. */
+  touch-action: none;
+}
+
+.draw-cell {
+  border: none;
+  padding: 0;
+  cursor: crosshair;
+  background: var(--plot-bg);
+}
+
+.draw-cell.is-on {
+  background: var(--text);
+}
+
+.draw-cell:focus-visible {
+  outline: var(--ring) solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 0;
+}
+
+.draw-lab-side {
+  flex: 1;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.draw-lab-buttons {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.draw-lab-side .image-lab-note {
+  margin: 0;
+}
+
+/* On a phone the lab row is 45vh, and a 168px grid plus a wrapped column of
+   results pushes the answer out of sight — which loses the only thing the
+   drawing was for. Shrink the canvas so the verdict stays on screen. */
+@media (max-width: 767px) {
+  .draw-grid {
+    width: 132px;
+  }
+
+  .draw-lab-side {
+    min-width: 150px;
+  }
 }
