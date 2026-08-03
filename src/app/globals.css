@@ -1488,6 +1488,404 @@ canvas.is-probeable {
   }
 }
 
+/* ─── Welcome guide ───
+   Four screens shown once on a first visit. Every animation below is written so
+   that switching it off leaves the finished state on screen: curves end drawn,
+   boundaries end settled, pixels end lit. Motion is the explanation here, not
+   decoration, so removing it must not remove the diagram. */
+
+.wg-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+  background: color-mix(in srgb, #000 68%, transparent);
+  backdrop-filter: blur(4px);
+  animation: lesson-scrim-in 180ms ease-out both;
+}
+
+.wg-sheet {
+  width: min(64ch, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--bg-panel);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  animation: lesson-sheet-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.wg-sheet:focus {
+  outline: none;
+}
+
+.wg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.wg-brand {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--t-body);
+  letter-spacing: 0.02em;
+}
+
+.wg-brand span {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.wg-figure {
+  margin: 0;
+}
+
+.wg-figure-frame {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  padding: var(--s-3);
+}
+
+.wg-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.wg-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.wg-eyebrow {
+  margin: 0;
+  font-size: var(--t-small);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+
+.wg-title {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.wg-body {
+  margin: 0;
+  max-width: 58ch;
+  font-size: var(--t-body);
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.wg-body strong {
+  color: var(--text);
+}
+
+.wg-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+
+.wg-dots {
+  display: flex;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The hit area is a full touch target; only the pip is small. */
+.wg-dot {
+  display: block;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.wg-dot::after {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 30%, transparent);
+}
+
+.wg-dot.is-current::after {
+  inset: 7px;
+  background: var(--accent);
+}
+
+.wg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-left: auto;
+}
+
+/* ── figure: workspace map ──
+   Two diagrams, one shown, matching the breakpoint the real grid switches at. */
+.wg-map-narrow {
+  display: none;
+  max-width: 240px;
+  margin: 0 auto;
+}
+
+@media (max-width: 767px) {
+  .wg-map-wide {
+    display: none;
+  }
+
+  .wg-map-narrow {
+    display: block;
+  }
+}
+
+.wg-panel rect {
+  fill: color-mix(in srgb, var(--text) 4%, transparent);
+  stroke: var(--border);
+  stroke-width: 1;
+  animation: wg-panel-wake 3.6s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.4s);
+}
+
+.wg-panel text {
+  fill: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-anchor: middle;
+}
+
+.wg-panel.is-primary rect {
+  fill: color-mix(in srgb, var(--accent) 10%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.wg-panel.is-primary text {
+  fill: var(--accent);
+}
+
+@keyframes wg-panel-wake {
+  0%, 72%, 100% { stroke: var(--border); }
+  12%, 24% { stroke: color-mix(in srgb, var(--accent) 70%, transparent); }
+}
+
+/* ── figure: live training ── */
+.wg-plot {
+  fill: color-mix(in srgb, var(--text) 3%, transparent);
+  stroke: var(--border);
+}
+
+.wg-dot-0 {
+  fill: var(--class-0);
+}
+
+.wg-dot-1 {
+  fill: var(--class-1);
+}
+
+.wg-boundary {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Swings in from a wrong angle and settles — the run, not the result. */
+.wg-boundary-spin {
+  /* The midpoint of the line, so the swing pivots on the boundary itself. */
+  transform-origin: 88px 90px;
+  animation: wg-settle 3.4s cubic-bezier(0.3, 0.9, 0.3, 1) infinite;
+}
+
+@keyframes wg-settle {
+  0% { transform: rotate(-38deg); opacity: 0.35; }
+  55%, 100% { transform: rotate(0deg); opacity: 1; }
+}
+
+.wg-loss-curve {
+  fill: none;
+  stroke: var(--series-loss);
+  stroke-width: 2;
+  stroke-linecap: round;
+  /* Longer than the path, so one value covers it whatever the renderer
+     measures; the offset animates from hidden to the drawn state below. */
+  stroke-dasharray: 460;
+  stroke-dashoffset: 0;
+  animation: wg-draw 3.4s ease-out infinite;
+}
+
+@keyframes wg-draw {
+  0% { stroke-dashoffset: 460; }
+  70%, 100% { stroke-dashoffset: 0; }
+}
+
+.wg-axis-label {
+  fill: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ── figure: the loop ── */
+.wg-ring {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 2;
+  stroke-dasharray: 4 6;
+}
+
+.wg-ring-arrow {
+  fill: color-mix(in srgb, var(--accent-2) 70%, transparent);
+}
+
+.wg-ring-runner {
+  fill: var(--accent);
+  offset-path: path("M 280 22 A 66 66 0 1 1 280 154 A 66 66 0 1 1 280 22");
+  offset-distance: 0%;
+  animation: wg-orbit 5s linear infinite;
+}
+
+@keyframes wg-orbit {
+  to { offset-distance: 100%; }
+}
+
+.wg-node circle {
+  fill: var(--bg-panel);
+  stroke: var(--accent-2);
+  stroke-width: 2;
+}
+
+.wg-node text {
+  fill: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.wg-ring-centre {
+  fill: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-anchor: middle;
+  letter-spacing: 0.08em;
+}
+
+/* ── figure: the two gestures ── */
+.wg-pin {
+  stroke-width: 2;
+}
+
+.wg-pin-1 {
+  fill: color-mix(in srgb, var(--class-1) 45%, transparent);
+  stroke: var(--class-1);
+}
+
+.wg-pin-0 {
+  fill: color-mix(in srgb, var(--class-0) 45%, transparent);
+  stroke: var(--class-0);
+}
+
+/* The base transform is the resting state, which is what shows when the
+   animation is switched off. Without one these park at x=0 — the crosshair
+   outside its plot and the needle off the end of its track. */
+.wg-cursor-track {
+  transform: translateX(78px);
+  animation: wg-traverse 4.2s ease-in-out infinite;
+}
+
+@keyframes wg-traverse {
+  0%, 100% { transform: translateX(46px); }
+  50% { transform: translateX(196px); }
+}
+
+.wg-cursor-line {
+  stroke: color-mix(in srgb, var(--accent) 40%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.wg-cursor-pin {
+  fill: color-mix(in srgb, var(--accent) 35%, transparent);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.wg-needle-track {
+  fill: none;
+  stroke: var(--border);
+}
+
+.wg-needle-mid {
+  fill: color-mix(in srgb, var(--text) 45%, transparent);
+}
+
+.wg-needle {
+  fill: var(--accent);
+  /* Tracks the cursor, because the readout answers about where it is. */
+  transform: translateX(78px);
+  animation: wg-traverse 4.2s ease-in-out infinite;
+}
+
+.wg-pixel {
+  fill: color-mix(in srgb, var(--text) 7%, transparent);
+  stroke: var(--border);
+}
+
+.wg-pixel.is-on {
+  fill: var(--text);
+  animation: wg-paint 4.2s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.28s);
+}
+
+@keyframes wg-paint {
+  0%, 6% { fill: color-mix(in srgb, var(--text) 7%, transparent); }
+  20%, 82% { fill: var(--text); }
+  96%, 100% { fill: color-mix(in srgb, var(--text) 7%, transparent); }
+}
+
+.wg-divider {
+  stroke: var(--border);
+}
+
+/* Every figure keeps its finished state; only the movement goes. */
+@media (prefers-reduced-motion: reduce) {
+  .wg-scrim,
+  .wg-sheet,
+  .wg-panel rect,
+  .wg-boundary-spin,
+  .wg-loss-curve,
+  .wg-cursor-track,
+  .wg-needle,
+  .wg-pixel.is-on {
+    animation: none;
+  }
+
+  /* The orbiting dot means nothing parked at one point on the ring. */
+  .wg-ring-runner {
+    animation: none;
+    display: none;
+  }
+}
+
 /* ─── Drawable input (image datasets) ─── */
 .draw-lab {
   display: flex;

@@ -67,7 +67,7 @@ Leave `BASE_PATH` unset for local work so the app stays rooted at `/`.
 
 **Definition of Done path (Chapter 1):**
 
-1. Open the app (Modern Dark or Retro Blue theme).
+1. Open the app (Modern Dark or Retro Blue theme). A four-screen welcome guide opens on a first visit — the panel map, the loop, and the two gestures — and can be reopened from the **?** in the header.
 2. Chapter 1 starter is a single dense perceptron on XOR/AND.
 3. Press **Train ▶** (or Ctrl/⌘+Enter) — the boundary sweeps across the Data Lab as the loss curve fills in. Use **Pause** / **Step +1** to inspect a single epoch.
 4. Switch `dataset` between `and` and `xor`: AND ends at 0/4 misclassified, XOR sticks at 2/4 with the failing points ringed. That contrast *is* the lesson.

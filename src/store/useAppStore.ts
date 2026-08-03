@@ -42,6 +42,8 @@ import {
   loadExperiment,
   loadProgress,
   loadTheme,
+  loadWelcomeSeen,
+  markWelcomeSeen,
   saveExperiment,
   saveProgress,
   saveTheme,
@@ -108,6 +110,9 @@ interface AppState {
   runExample: (dsl: string) => void;
   lessonOpen: boolean;
   setLessonOpen: (open: boolean) => void;
+  /** The first-run guide. Opens itself once, then only on request. */
+  welcomeOpen: boolean;
+  setWelcomeOpen: (open: boolean) => void;
   trainNow: (reason?: string) => void;
   pauseTraining: () => void;
   resumeTraining: () => void;
@@ -478,6 +483,9 @@ export const useAppStore = create<AppState>((set, get) => {
     activeChallengeId: null,
     challengeFeedback: {},
     lessonOpen: false,
+    // Stays shut until hydrate() has read storage: opening on the server render
+    // would flash the guide at a returning reader before we know they've seen it.
+    welcomeOpen: false,
     lastTrigger: null,
 
     setTheme: (t) => {
@@ -553,6 +561,16 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     setLessonOpen: (open) => set({ lessonOpen: open }),
+
+    /**
+     * Closing counts as having seen it, however the reader closed it. Someone
+     * who dismissed the guide on purpose has answered the question of whether
+     * they want it, and asking again next visit would ignore that answer.
+     */
+    setWelcomeOpen: (open) => {
+      set({ welcomeOpen: open });
+      if (!open) markWelcomeSeen();
+    },
 
     trainNow: (reason = "manual") => {
       cancelLoop();
@@ -995,6 +1013,7 @@ export const useAppStore = create<AppState>((set, get) => {
         }
       }
       if (progress) set({ progress });
+      if (!loadWelcomeSeen()) set({ welcomeOpen: true });
     },
   };
 });
