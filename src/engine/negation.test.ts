@@ -258,7 +258,46 @@ train dataset=negation lr=0.1 epochs=150
   it(
     "is learnable by attention (aggregate full-train accuracy)",
     () => {
-      const RUNS = 8;
+      // Measured over 200 unseeded runs of exactly this recipe (lr=0.1, 150
+      // epochs, all 32 samples, `_measure_negation.mts`). Accuracy is not
+      // noisy-around-a-mean, it is three discrete modes with nothing between:
+      //
+      //   | full-train acc | runs/200 | share | reading                      |
+      //   |----------------|---------:|------:|------------------------------|
+      //   | 0.125 – 0.625  |       19 |  9.5% | never left chance            |
+      //   | 0.875 = 28/32  |       84 | 42.0% | fitted to the linear ceiling |
+      //   | 1.000          |       97 | 48.5% | solved                       |
+      //
+      // so P(acc ≥ 0.9) = 0.485 and P(acc ≥ 0.75) = 0.905; mean 0.897, sd 0.156.
+      //
+      // This used to assert `mean(8 runs) ≥ 0.75` and `max ≥ 0.9`. Both are the
+      // wrong shape for that distribution, and one of them was worse than flaky:
+      //
+      //  - it flakes: bootstrapping 20k resamples of the measured 200 gives
+      //    `mean(8) < 0.75` in 1.2% of runs and `max(8) < 0.9` in 0.4%. It duly
+      //    failed once locally, and CI here gates the Pages deploy.
+      //  - a mean of 0.75 does not separate learning from not learning. A single
+      //    sigmoid neuron on the flat 16 one-hots cannot express this XOR at
+      //    all, and scores exactly 0.75 every run — it would have passed too.
+      //
+      // Counting the runs that clear 0.9 is both stabler and stricter, and 0.9
+      // is structural rather than tuned: on 32 samples it means ≥ 29 correct,
+      // one better than the 28/32 = 0.875 hard ceiling of any linear
+      // bag-of-words halfspace (file header). Across 180 measured runs of three
+      // such baselines — linear-on-flat, linear-on-bag at lr 0.1 and lr 0.5 —
+      // not one reached 0.9; attention reaches it about half the time.
+      //
+      // RUNS is sized from the same measurement: P(fewer than 2 of 20 clear 0.9)
+      // = 3e-5, against 1.2% for the old mean at 8, and P(fewer than half of 20
+      // fitting at all) < 1e-9. Costs ~60s locally / ~180s on a CI runner.
+      //
+      // Do not put the mean back, do not drop RUNS, and do not seed the engine
+      // to buy determinism instead: a fixed seed would prove that one draw
+      // learns negation, not that this architecture does.
+      const RUNS = 20;
+      const SOLVED = 0.9; // ≥ 29/32 — strictly above the linear-bag ceiling
+      const FITTED = 0.75; // left edge of the fitted modes (0.875 and 1.0)
+      const MIN_SOLVED = 2; // one lucky run must not carry the assertion
       const config: NetworkConfig = {
         layers: [
           { type: "attention", dModel: 4, nHeads: 2 },
@@ -271,9 +310,43 @@ train dataset=negation lr=0.1 epochs=150
         const model = trainOnSamples(config, samples, 0.1, 150, FLAT);
         accs.push(accuracyOn(model, samples));
       }
-      // FD training is noisy; mean should clearly beat chance
-      expect(mean(accs)).toBeGreaterThanOrEqual(0.75);
-      expect(Math.max(...accs)).toBeGreaterThanOrEqual(0.9);
+      const solved = accs.filter((a) => a >= SOLVED).length;
+      const fitted = accs.filter((a) => a >= FITTED).length;
+      console.log(
+        "[negation attention full-train]",
+        JSON.stringify({
+          RUNS,
+          solved,
+          fitted,
+          mean: +mean(accs).toFixed(3),
+          accs: accs.map((a) => +a.toFixed(3)),
+        })
+      );
+
+      // Half the runs clear 0.9 and 90% fit at all, so both bars sit far below
+      // the measured counts (expected 9.7 and 18.1) — but a model that only
+      // ever reaches the linear ceiling contributes zero to `solved`, and one
+      // that never learns contributes zero to both.
+      expect(solved).toBeGreaterThanOrEqual(MIN_SOLVED);
+      expect(fitted).toBeGreaterThanOrEqual(RUNS / 2);
+
+      // The 0.9 bar only proves something if a model that *cannot* learn
+      // negation cannot clear it. A single sigmoid neuron on the flat one-hots
+      // is that model — no hidden layer, so no XOR — and it is not merely bad
+      // but pinned: exactly 0.75 in 1000 of 1000 measured runs, so it would
+      // have passed the old `mean ≥ 0.75` and can never approach 0.9.
+      const linearFlat: NetworkConfig = {
+        layers: [
+          { type: "dense", units: 1, activation: "sigmoid", inputDim: FLAT },
+        ],
+      };
+      const linearAccs: number[] = [];
+      for (let r = 0; r < 6; r++) {
+        const model = trainOnSamples(linearFlat, samples, 0.1, 150, FLAT);
+        linearAccs.push(accuracyOn(model, samples));
+      }
+      expect(Math.max(...linearAccs)).toBeLessThan(SOLVED);
+      expect(mean(linearAccs)).toBeGreaterThanOrEqual(0.7);
     }
   );
 });
