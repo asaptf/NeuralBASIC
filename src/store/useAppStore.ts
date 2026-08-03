@@ -16,6 +16,7 @@ import {
   buildDecisionGrid,
   cloneModelFromWeights,
   createTrainingSession,
+  DSLInputShapeError,
   evaluateModel,
   forward,
   getDataset,
@@ -509,7 +510,13 @@ export const useAppStore = create<AppState>((set, get) => {
       // The previous run's loss curve and accuracy describe a different dataset;
       // keeping them on screen under the new dataset's name is a lie.
       clearRunState();
-      set({ trainConfig, dsl });
+      const shapeError = shapeErrorFor(dsl);
+      set({
+        trainConfig,
+        dsl,
+        parseError:
+          shapeError === undefined ? get().parseError : shapeError,
+      });
     },
 
     parseAndApplyDsl: () => {
@@ -998,6 +1005,27 @@ export const useAppStore = create<AppState>((set, get) => {
     },
   };
 });
+
+/**
+ * What the editor strip should say after the dataset changed:
+ * - a string: this dataset cannot supply the declared input shape. That is a DSL
+ *   problem, so it belongs under the editor — and the learner should see it on
+ *   the dropdown change, not only after pressing Train (where the mismatch would
+ *   otherwise sit as NaN loss or a crashed run). Same wording and line number
+ *   Train gives it.
+ * - null: the program is fine against the new dataset; clear the strip.
+ * - undefined: some other parse failure. Leave the strip exactly as it is — a
+ *   half-typed program must not start nagging from a dropdown change, and a
+ *   syntax error Train already reported must not be erased by one.
+ */
+function shapeErrorFor(dsl: string): string | null | undefined {
+  try {
+    parseDSL(dsl);
+    return null;
+  } catch (e) {
+    return e instanceof DSLInputShapeError ? e.message : undefined;
+  }
+}
 
 function syncTrainInDsl(dsl: string, train: TrainConfig): string {
   const trainLine = `train dataset=${train.dataset} lr=${train.learningRate} epochs=${train.epochs}`;

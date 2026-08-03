@@ -1,3 +1,4 @@
+import { checkInputShape } from "./shape";
 import type {
   ActivationName,
   DatasetName,
@@ -24,6 +25,22 @@ export class DSLParseError extends Error {
     super(full);
     this.name = "DSLParseError";
     this.line = line;
+  }
+}
+
+/**
+ * Narrow parse failure: the program is syntactically valid but the first
+ * layer's *declared* input shape is incompatible with the selected dataset.
+ *
+ * Subclass of {@link DSLParseError} so existing `instanceof DSLParseError` /
+ * `toThrow(DSLParseError)` checks keep working. Callers that need to tell
+ * shape rejection apart from a half-typed program (e.g. the dataset dropdown)
+ * should test `instanceof DSLInputShapeError`.
+ */
+export class DSLInputShapeError extends DSLParseError {
+  constructor(message: string, line: number) {
+    super(message, line);
+    this.name = "DSLInputShapeError";
   }
 }
 
@@ -128,6 +145,8 @@ export function parseDSL(source: string): ParsedProgram {
 
   let name = "Net";
   const layers: LayerConfig[] = [];
+  /** 1-based source line for each entry in `layers` (same order). */
+  const layerLines: number[] = [];
   let l2 = 0;
   let dropout = 0;
   let train: TrainConfig = {
@@ -209,6 +228,7 @@ export function parseDSL(source: string): ParsedProgram {
 
     if (inNetwork) {
       layers.push(parseLayerLine(text, line));
+      layerLines.push(line);
       continue;
     }
 
@@ -247,8 +267,21 @@ export function parseDSL(source: string): ParsedProgram {
     );
   }
 
+  const network: NetworkConfig = { name, layers, l2, dropout };
+
+  // Reject a *declared* input shape the selected dataset cannot supply — same
+  // class of error as an unknown activation (surfaces under the editor via
+  // parseError). Inference of unset shapes stays in prepareNetworkConfig.
+  const shapeMismatch = checkInputShape(network, train.dataset);
+  if (shapeMismatch) {
+    const errLine =
+      layerLines[shapeMismatch.layerIndex] ??
+      (networkOpenLine || lines[0]!.line);
+    throw new DSLInputShapeError(shapeMismatch.message, errLine);
+  }
+
   return {
-    network: { name, layers, l2, dropout },
+    network,
     train,
     raw: source,
   };

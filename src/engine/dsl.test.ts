@@ -97,10 +97,16 @@ train dataset=tiny_images lr=0.12 epochs=100
   },
   {
     id: "ch4-c3",
-    dsl: defaultStarterDSL("ch4").replace(
-      /dataset=\w+/,
-      "dataset=tiny_images"
-    ),
+    // Matches curriculum.completeness.test.ts FlattenPath solution (4×4),
+    // not the ch4 starter's 8×8 shifted_bars shape with the dataset swapped.
+    dsl: `network FlattenPath {
+  conv2d filters=4 kernel=2 activation=relu channels=1 height=4 width=4
+  flatten
+  dense 8 activation=relu
+  dense 2 activation=sigmoid
+}
+train dataset=tiny_images lr=0.12 epochs=100
+`,
   },
   {
     id: "ch5-c1",
@@ -475,5 +481,79 @@ train dataset=xor lr=0 epochs=10
 `,
       { line: 4, message: /lr|positive/i }
     );
+  });
+
+  it("rejects dense input size the dataset cannot supply (ch1 starter + shifted_bars)", () => {
+    // Repro 1: Chapter 1 starter shape against 8×8 spatial dataset.
+    const pe = expectParseError(
+      `network Perceptron {
+  dense 2 -> 1 activation=sigmoid
+}
+train dataset=shifted_bars lr=0.8 epochs=200
+`,
+      { line: 2, message: /input size mismatch|declares 2/i }
+    );
+    expect(pe.message).toMatch(/shifted_bars/i);
+    expect(pe.message).toMatch(/1×8×8\s*=\s*64|64/);
+    // Names a way out: corrected layer and/or a valid alternative dataset.
+    expect(pe.message).toMatch(/dense 64|xor|and|or|moons|circles/i);
+  });
+
+  it("rejects conv2d shape the dataset cannot supply (ch4 starter shape + circles)", () => {
+    // Repro 2: spatial 1×8×8 declaration against a 2-feature toy dataset.
+    const pe = expectParseError(
+      `network ShiftedCNN {
+  conv2d filters=4 kernel=3 activation=relu channels=1 height=8 width=8
+  pool mode=avg global=true
+  dense 2 activation=sigmoid
+}
+train dataset=circles lr=0.2 epochs=150
+`,
+      { line: 2, message: /input shape mismatch|declares/i }
+    );
+    expect(pe.message).toMatch(/circles/i);
+    expect(pe.message).toMatch(/1×8×8\s*=\s*64|64/);
+    expect(pe.message).toMatch(/2/);
+    // At least one valid alternative dataset for the declared size.
+    expect(pe.message).toMatch(/shifted_bars/i);
+  });
+});
+
+describe("parseDSL — input shape inference still works when unset", () => {
+  it("accepts first-layer dense without inputDim (inferred later)", () => {
+    const parsed = parseDSL(`network N {
+  dense 4 activation=relu
+  dense 1 activation=sigmoid
+}
+train dataset=shifted_bars lr=0.1 epochs=10
+`);
+    expect(parsed.network.layers[0]).toMatchObject({
+      type: "dense",
+      units: 4,
+      activation: "relu",
+    });
+    expect(
+      (parsed.network.layers[0] as { inputDim?: number }).inputDim
+    ).toBeUndefined();
+  });
+
+  it("accepts conv2d with no channels/height/width (inferred later)", () => {
+    const parsed = parseDSL(`network N {
+  conv2d filters=4 kernel=3 activation=relu
+  flatten
+  dense 2 activation=sigmoid
+}
+train dataset=shifted_bars lr=0.1 epochs=10
+`);
+    const conv = parsed.network.layers[0] as {
+      type: string;
+      inputChannels?: number;
+      inputHeight?: number;
+      inputWidth?: number;
+    };
+    expect(conv.type).toBe("conv2d");
+    expect(conv.inputChannels).toBeUndefined();
+    expect(conv.inputHeight).toBeUndefined();
+    expect(conv.inputWidth).toBeUndefined();
   });
 });

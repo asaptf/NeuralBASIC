@@ -400,6 +400,53 @@ describe("useAppStore — state coherence", () => {
     expect(cleared.isTraining).toBe(false);
   });
 
+  it("10b. setDataset reports a shape the new dataset cannot supply, under the editor", () => {
+    // The reported repro: leave a chapter's starter in the editor, change the
+    // dataset dropdown. `dense 2 -> 1` cannot read 8×8 samples, and the learner
+    // must be told instead of watching loss go NaN.
+    store.getState().setDsl(SMALL_AND_DSL);
+    store.getState().setDataset("shifted_bars");
+
+    const bad = store.getState();
+    expect(bad.parseError).toMatch(/shifted_bars/);
+    expect(bad.parseError).toMatch(/64/);
+    // Training must refuse the same program for the same reason.
+    store.getState().trainNow();
+    expect(store.getState().isTraining).toBe(false);
+    expect(store.getState().lastSnapshot).toBeNull();
+    expect(store.getState().parseError).toMatch(/shifted_bars/);
+
+    // A second incompatible dataset must update the strip, not clear it —
+    // the program is still wrong, just wrong about a different width now.
+    store.getState().setDataset("tiny_text");
+    expect(store.getState().parseError).toMatch(/tiny_text/);
+    expect(store.getState().parseError).toMatch(/8/);
+
+    // Back to a dataset the declared shape fits: the strip clears.
+    store.getState().setDataset("xor");
+    expect(store.getState().parseError).toBeNull();
+  });
+
+  it("10c. setDataset stays quiet about a half-typed program", () => {
+    store.getState().setDsl("network Half {\n  dense 2 -> ");
+    store.getState().setDataset("shifted_bars");
+    // Syntax the learner is mid-fixing is Train's business, not the dropdown's.
+    expect(store.getState().parseError).toBeNull();
+  });
+
+  it("10d. setDataset does not erase a syntax error Train already reported", () => {
+    store.getState().setDsl(
+      "network Bad {\n  dense 2 -> 1 activation=banana\n}\ntrain dataset=xor lr=0.5 epochs=5\n"
+    );
+    store.getState().trainNow();
+    const reported = store.getState().parseError;
+    expect(reported).toMatch(/banana/);
+
+    // The dataset line changed; the broken activation did not.
+    store.getState().setDataset("moons");
+    expect(store.getState().parseError).toBe(reported);
+  });
+
   it("11. loadLocal after save restores experiment A and rebuilds its snapshot", () => {
     // Train A on AND.
     store.getState().setDsl(SMALL_AND_DSL);
