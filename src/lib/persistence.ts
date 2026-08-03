@@ -4,6 +4,7 @@ import type { LayerWeights, NetworkConfig, TrainConfig } from "@/engine/types";
 const EXPERIMENT_KEY = "neuralbasic:experiment:v1";
 const PROGRESS_KEY = "neuralbasic:progress:v1";
 const THEME_KEY = "neuralbasic:theme:v1";
+const WELCOME_KEY = "neuralbasic:welcome-seen:v1";
 
 export interface ExperimentState {
   dsl: string;
@@ -83,6 +84,25 @@ export function loadTheme(): "modern" | "retro" | null {
   const t = localStorage.getItem(THEME_KEY);
   if (t === "modern" || t === "retro") return t;
   return null;
+}
+
+export function markWelcomeSeen(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(WELCOME_KEY, "1");
+}
+
+/**
+ * Whether the guide has already been shown. Storage being unreadable counts as
+ * "seen": a guide that reopens on every load is worse than one a new reader
+ * has to find for themselves.
+ */
+export function loadWelcomeSeen(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(WELCOME_KEY) === "1";
+  } catch {
+    return true;
+  }
 }
 
 export function downloadText(filename: string, text: string, mime = "application/json") {

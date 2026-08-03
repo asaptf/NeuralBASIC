@@ -18,6 +18,9 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Nested agent worktrees are full checkouts; their .next builds are not
+      // project source and would otherwise flood bare `npx eslint`.
+      ".claude/worktrees/**",
     ],
   },
 ];

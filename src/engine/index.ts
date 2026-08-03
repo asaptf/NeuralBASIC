@@ -15,4 +15,5 @@ export * from "./model";
 export * from "./train";
 export * from "./dsl";
 export * from "./export";
+export * from "./probe";
 export * from "./shape";

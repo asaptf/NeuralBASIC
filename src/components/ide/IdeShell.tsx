@@ -11,6 +11,7 @@ import { LessonView } from "@/components/curriculum/LessonView";
 import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { TutorPanel } from "@/components/tutor/TutorPanel";
 import { NetworkVisualizer } from "@/components/visualizer/NetworkVisualizer";
+import { WelcomeGuide } from "@/components/onboarding/WelcomeGuide";
 import { useAppStore } from "@/store/useAppStore";
 
 export function IdeShell() {
@@ -23,6 +24,7 @@ export function IdeShell() {
   const exportModel = useAppStore((s) => s.exportModel);
   const importExperimentFile = useAppStore((s) => s.importExperimentFile);
   const trainNow = useAppStore((s) => s.trainNow);
+  const setWelcomeOpen = useAppStore((s) => s.setWelcomeOpen);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -138,6 +140,35 @@ export function IdeShell() {
               Retro Blue
             </button>
           </div>
+          {/* Icon-only for the same reason the source link is: the header is
+              already at its limit of worded buttons, and a reader looking for
+              the guide is looking for a question mark. */}
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon"
+            data-testid="btn-welcome"
+            aria-label="Open the welcome guide"
+            title="Welcome guide"
+            onClick={() => setWelcomeOpen(true)}
+          >
+            <svg
+              viewBox="0 0 16 16"
+              width="15"
+              height="15"
+              aria-hidden="true"
+              focusable="false"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            >
+              <circle cx="8" cy="8" r="6.7" />
+              <path
+                d="M6.1 6.1a1.95 1.95 0 1 1 2.6 1.85c-.45.17-.7.55-.7 1.02v.28"
+                strokeLinecap="round"
+              />
+              <circle cx="8" cy="11.7" r="0.85" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
           <GitHubLink />
         </div>
       </header>
@@ -166,6 +197,7 @@ export function IdeShell() {
       </main>
 
       <LessonView />
+      <WelcomeGuide />
 
       <footer className="ide-footer">
         <span>Ctrl/⌘+Enter = Train</span>

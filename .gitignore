@@ -24,6 +24,11 @@
 .DS_Store
 *.pem
 
+# Agent worktrees are full checkouts nested inside the repo. Untracked they are
+# a footgun: `git add -A` records one as a gitlink with no .gitmodules entry and
+# an absolute path only this machine has, which no other clone can reconstruct.
+/.claude/worktrees/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
